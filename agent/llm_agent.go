@@ -216,7 +216,7 @@ func (a *LLMAgent) Description() string {
 }
 
 func (a *LLMAgent) newInvocationContext(ctx context.Context, p *adk.InvocationContext) (context.Context, *adk.InvocationContext) {
-	ctx, c := adk.NewInvocationContext(ctx, a)
+	ctx, c := adk.NewInvocationContext(ctx, a, nil, nil)
 	if p != nil {
 		// copy everything but Agent and internal state.
 		c.InvocationID = p.InvocationID
@@ -224,6 +224,7 @@ func (a *LLMAgent) newInvocationContext(ctx context.Context, p *adk.InvocationCo
 		c.UserContent = p.UserContent
 		c.RunConfig = p.RunConfig
 		c.Session = p.Session
+		c.SessionService = p.SessionService
 	}
 	return ctx, c
 }
