@@ -15,13 +15,14 @@
 package llmagent
 
 import (
+	"fmt"
 	"iter"
 
 	"google.golang.org/adk/agent"
 	"google.golang.org/adk/internal/llminternal"
 	"google.golang.org/adk/llm"
 	"google.golang.org/adk/session"
-	"google.golang.org/adk/tool"
+	"google.golang.org/adk/types"
 	"google.golang.org/genai"
 )
 
@@ -31,18 +32,26 @@ func New(cfg Config) (agent.Agent, error) {
 		instruction: cfg.Instruction,
 
 		State: llminternal.State{
+			Model:                    cfg.Model,
 			DisallowTransferToParent: cfg.DisallowTransferToParent,
 		},
 	}
 
-	return agent.New(agent.Config{
+	baseAgent, err := agent.New(agent.Config{
 		Name:        cfg.Name,
 		Description: cfg.Description,
 		SubAgents:   cfg.SubAgents,
 		BeforeAgent: cfg.BeforeAgent,
-		Run:         a.Run,
+		Run:         a.run,
 		AfterAgent:  cfg.AfterAgent,
 	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create agent: %w", err)
+	}
+
+	a.Agent = baseAgent
+
+	return a, nil
 }
 
 type Config struct {
@@ -53,9 +62,9 @@ type Config struct {
 	BeforeAgent []agent.Callback
 	AfterAgent  []agent.Callback
 
-	BeforeModel []agent.BeforeModelCallback
+	BeforeModel []BeforeModelCallback
 	Model       llm.Model
-	AfterModel  []agent.AfterModelCallback
+	AfterModel  []AfterModelCallback
 
 	Instruction       string
 	GlobalInstruction string
@@ -69,7 +78,8 @@ type Config struct {
 	OutputSchema *genai.Schema
 
 	// TODO: BeforeTool and AfterTool callbacks
-	Tools []tool.Tool
+	// TODO: switch to tool.Tool. Right now it's types.Tool to reduce chages.
+	Tools []types.Tool
 }
 
 type BeforeModelCallback func(ctx agent.Context, llmRequest *llm.Request) (*llm.Response, error)
@@ -84,7 +94,7 @@ type llmAgent struct {
 	instruction string
 }
 
-func (a *llmAgent) Run(ctx agent.Context) iter.Seq2[*session.Event, error] {
+func (a *llmAgent) run(ctx agent.Context) iter.Seq2[*session.Event, error] {
 	req := &llm.Request{
 		Contents: []*genai.Content{
 			ctx.UserContent(),
