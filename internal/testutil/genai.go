@@ -1,4 +1,18 @@
-package httprr
+// Copyright 2025 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package testutil
 
 import (
 	"bytes"
@@ -6,11 +20,13 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+
+	"google.golang.org/adk/internal/httprr"
 )
 
-// NewGeminiTransportForTesting returns the genai.ClientConfig configured for record and replay.
-func NewGeminiTransportForTesting(rrfile string) (http.RoundTripper, error) {
-	rr, err := Open(rrfile, http.DefaultTransport)
+// NewGeminiTransport returns the genai.ClientConfig configured for record and replay.
+func NewGeminiTransport(rrfile string) (http.RoundTripper, error) {
+	rr, err := httprr.Open(rrfile, http.DefaultTransport)
 	if err != nil {
 		return nil, fmt.Errorf("httprr.Open(%q) failed: %w", rrfile, err)
 	}
@@ -32,7 +48,7 @@ func scrubGeminiRequest(req *http.Request) error {
 		// goes out of its way to randomize the JSON encodings
 		// of protobuf messages by adding or not adding spaces
 		// after commas. Derandomize by compacting the JSON.
-		b := req.Body.(*Body)
+		b := req.Body.(*httprr.Body)
 		var buf bytes.Buffer
 		if err := json.Compact(&buf, b.Data); err == nil {
 			b.Data = buf.Bytes()

@@ -28,6 +28,8 @@ import (
 	"google.golang.org/adk/agent"
 	"google.golang.org/adk/agent/llmagent"
 	"google.golang.org/adk/internal/httprr"
+	"google.golang.org/adk/internal/testutil"
+
 	"google.golang.org/adk/llm"
 	"google.golang.org/adk/llm/gemini"
 	"google.golang.org/adk/runner"
@@ -655,7 +657,7 @@ func collectTextParts(stream iter.Seq2[*session.Event, error]) ([]string, error)
 
 func newGeminiTestClientConfig(t *testing.T, rrfile string) (http.RoundTripper, bool) {
 	t.Helper()
-	rr, err := httprr.NewGeminiTransportForTesting(rrfile)
+	rr, err := testutil.NewGeminiTransport(rrfile)
 	if err != nil {
 		t.Fatal(err)
 	}
