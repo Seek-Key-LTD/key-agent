@@ -20,10 +20,12 @@ import (
 	"log"
 	"os"
 
-	"google.golang.org/adk/cmd/web"
-
+	"google.golang.org/adk/agent"
 	"google.golang.org/adk/agent/llmagent"
+	"google.golang.org/adk/cmd/restapi/services"
+	"google.golang.org/adk/cmd/web"
 	"google.golang.org/adk/llm/gemini"
+	"google.golang.org/adk/sessionservice"
 	"google.golang.org/adk/tool"
 	"google.golang.org/adk/tool/geminitool"
 	"google.golang.org/genai"
@@ -38,8 +40,8 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to create model: %v", err)
 	}
-
-	agent, err := llmagent.New(llmagent.Config{
+	sessionService := sessionservice.Mem()
+	rootAgent, err := llmagent.New(llmagent.Config{
 		Name:        "weather_time_agent",
 		Model:       model,
 		Description: "Agent to answer questions about the time and weather in a city.",
@@ -52,10 +54,17 @@ func main() {
 		log.Fatalf("Failed to create agent: %v", err)
 	}
 
-	_ = agent
+	agentLoader := services.NewStaticAgentLoader(
+		map[string]agent.Agent{
+			"weather_time_agent": rootAgent,
+		},
+	)
 
 	config := web.ParseArgs()
 	fmt.Println(config)
-	web.Serve(config)
+	web.Serve(config, &web.ServeConfig{
+		SessionService: sessionService,
+		AgentLoader:    agentLoader,
+	})
 
 }

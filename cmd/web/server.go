@@ -25,7 +25,9 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/rs/cors"
 	"google.golang.org/adk/cmd/restapi/config"
+	"google.golang.org/adk/cmd/restapi/services"
 	restapiweb "google.golang.org/adk/cmd/restapi/web"
+	"google.golang.org/adk/sessionservice"
 )
 
 // WebConfig is a struct with parameters to run a WebServer.
@@ -66,9 +68,17 @@ func logRequestHandler(h http.Handler) http.Handler {
 	return http.HandlerFunc(fn)
 }
 
+type ServeConfig struct {
+	SessionService sessionservice.Service
+	AgentLoader    services.AgentLoader
+}
+
 // Serve initiates the http server and starts it according to WebConfig parameters
-func Serve(c *WebConfig) {
-	var serverConfig config.ADKAPIRouterConfigs
+func Serve(c *WebConfig, serveConfig *ServeConfig) {
+	serverConfig := config.ADKAPIRouterConfigs{
+		SessionService: serveConfig.SessionService,
+		AgentLoader:    serveConfig.AgentLoader,
+	}
 	serverConfig.Cors = *cors.New(cors.Options{
 		AllowedOrigins:   []string{c.FrontEndServer},
 		AllowedMethods:   []string{http.MethodGet, http.MethodPost, http.MethodOptions, http.MethodDelete, http.MethodPut},

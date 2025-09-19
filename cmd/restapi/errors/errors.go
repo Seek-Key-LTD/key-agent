@@ -12,8 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// package main is the entry point for the REST API server.
-package main
+package errors
 
-func main() {
+type StatusError struct {
+	Err  error
+	Code int
+}
+
+func NewStatusError(err error, code int) StatusError {
+	return StatusError{Err: err, Code: code}
+}
+
+// Error returns an associated error
+func (se StatusError) Error() string {
+	return se.Err.Error()
+}
+
+// Status returns an associated status code
+func (se StatusError) Status() int {
+	return se.Code
 }

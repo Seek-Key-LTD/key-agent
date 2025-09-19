@@ -24,15 +24,15 @@ import (
 
 // SetupRouter initiates mux.Router with ADK REST API routers
 func SetupRouter(router *mux.Router, routerConfig *config.ADKAPIRouterConfigs) *mux.Router {
-	return setupRouter(router, routerConfig,
-		routers.NewSessionsAPIRouter(&handlers.SessionsAPIController{}),
-		routers.NewRuntimeAPIRouter(&handlers.RuntimeAPIController{}),
-		routers.NewAppsAPIRouter(&handlers.AppsAPIController{}),
+	return setupRouter(router,
+		routers.NewSessionsAPIRouter(handlers.NewSessionsAPIController(routerConfig.SessionService)),
+		routers.NewRuntimeAPIRouter(handlers.NewRuntimeAPIRouter(routerConfig.SessionService, routerConfig.AgentLoader)),
+		routers.NewAppsAPIRouter(handlers.NewAppsAPIController(routerConfig.AgentLoader)),
 		routers.NewDebugAPIRouter(&handlers.DebugAPIController{}),
 		routers.NewArtifactsAPIRouter(&handlers.ArtifactsAPIController{}))
 }
 
-func setupRouter(router *mux.Router, routerConfig *config.ADKAPIRouterConfigs, subrouters ...routers.Router) *mux.Router {
+func setupRouter(router *mux.Router, subrouters ...routers.Router) *mux.Router {
 	routers.SetupSubRouters(router, subrouters...)
 	return router
 }
