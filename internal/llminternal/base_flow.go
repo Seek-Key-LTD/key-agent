@@ -59,6 +59,7 @@ var (
 		// to optimize data files.
 		codeExecutionRequestProcessor,
 		AgentTransferRequestProcessor,
+		removeDisplayNameIfExists,
 	}
 	DefaultResponseProcessors = []func(ctx agent.Context, req *llm.Request, resp *llm.Response) error{
 		nlPlanningResponseProcessor,
@@ -222,7 +223,6 @@ func toolPreprocess(ctx agent.Context, req *llm.Request, tools []tool.Tool) erro
 			return err
 		}
 	}
-
 	return nil
 }
 
