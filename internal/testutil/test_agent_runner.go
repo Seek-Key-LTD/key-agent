@@ -22,6 +22,7 @@ import (
 	"testing"
 
 	"google.golang.org/adk/agent"
+	"google.golang.org/adk/internal/llminternal"
 	"google.golang.org/adk/llm"
 	"google.golang.org/adk/runner"
 	"google.golang.org/adk/session"
@@ -111,8 +112,9 @@ func NewTestAgentRunner(t *testing.T, agent agent.Agent) *TestAgentRunner {
 }
 
 type MockModel struct {
-	Requests  []*llm.Request
-	Responses []*genai.Content
+	Requests             []*llm.Request
+	Responses            []*genai.Content
+	StreamResponsesCount int
 }
 
 var errNoModelData = errors.New("no data")
@@ -134,14 +136,27 @@ func (m *MockModel) Generate(ctx context.Context, req *llm.Request) (*llm.Respon
 }
 
 func (m *MockModel) GenerateStream(ctx context.Context, req *llm.Request) iter.Seq2[*llm.Response, error] {
+	aggregator := llminternal.NewStreamingResponseAggregator()
 	return func(yield func(*llm.Response, error) bool) {
-		if len(m.Responses) > 0 {
-			resp := &llm.Response{Content: m.Responses[0]}
-			m.Responses = m.Responses[1:]
-			yield(resp, nil)
-			return
+		streamResponsesCount := m.StreamResponsesCount
+		if streamResponsesCount == 0 {
+			streamResponsesCount = 1
 		}
-		yield(nil, fmt.Errorf("no more data"))
+		for i := 0; i < streamResponsesCount; i++ {
+			if len(m.Responses) == 0 {
+				break
+			}
+			resp := &genai.GenerateContentResponse{Candidates: []*genai.Candidate{{Content: m.Responses[0]}}}
+			m.Responses = m.Responses[1:]
+			for llmResponse, err := range aggregator.ProcessResponse(ctx, resp) {
+				if !yield(llmResponse, err) {
+					return // Consumer stopped
+				}
+			}
+		}
+		if closeResult := aggregator.Close(); closeResult != nil {
+			yield(closeResult, nil)
+		}
 	}
 }
 

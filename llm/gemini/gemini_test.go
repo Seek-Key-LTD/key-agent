@@ -23,6 +23,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"google.golang.org/adk/internal/httprr"
 	"google.golang.org/adk/internal/testutil"
 	"google.golang.org/adk/llm"
@@ -50,6 +51,14 @@ func TestModel_Generate(t *testing.T) {
 			},
 			want: &llm.Response{
 				Content: genai.NewContentFromText("Paris\n", genai.RoleModel),
+				UsageMetadata: &genai.GenerateContentResponseUsageMetadata{
+					CandidatesTokenCount:    2,
+					CandidatesTokensDetails: []*genai.ModalityTokenCount{{Modality: "TEXT", TokenCount: 2}},
+					PromptTokenCount:        10,
+					PromptTokensDetails:     []*genai.ModalityTokenCount{{Modality: "TEXT", TokenCount: 10}},
+					TotalTokenCount:         12,
+				},
+				FinishReason: "STOP",
 			},
 		},
 	}
@@ -67,7 +76,7 @@ func TestModel_Generate(t *testing.T) {
 				t.Errorf("Model.Generate() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			if diff := cmp.Diff(tt.want, got); diff != "" {
+			if diff := cmp.Diff(tt.want, got, cmpopts.IgnoreFields(llm.Response{}, "AvgLogprobs")); diff != "" {
 				t.Errorf("Model.Generate() = %v, want %v\ndiff(-want +got):\n%v", got, tt.want, diff)
 			}
 		})
@@ -103,13 +112,19 @@ func TestModel_GenerateStream(t *testing.T) {
 				t.Fatal(err)
 			}
 
+			// Transforms the stream into strings, concating the text value of the response parts
 			got, err := readResponse(model.GenerateStream(t.Context(), tt.req))
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Model.GenerateStream() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			if diff := cmp.Diff(tt.want, got); diff != "" {
-				t.Errorf("Model.GenerateStream() = %v, want %v\ndiff(-want +got):\n%v", got, tt.want, diff)
+
+			if diff := cmp.Diff(tt.want, got.PartialText); diff != "" {
+				t.Errorf("Model.GenerateStream() = %v, want %v\ndiff(-want +got):\n%v", got.PartialText, tt.want, diff)
+			}
+			// Since we are expecting GenerateStream to aggregate partial events, the text should be the same
+			if diff := cmp.Diff(tt.want, got.FinalText); diff != "" {
+				t.Errorf("Model.GenerateStream() = %v, want %v\ndiff(-want +got):\n%v", got.FinalText, tt.want, diff)
 			}
 		})
 	}
@@ -132,16 +147,41 @@ func newGeminiTestClientConfig(t *testing.T, rrfile string) *genai.ClientConfig 
 	}
 }
 
-func readResponse(s iter.Seq2[*llm.Response, error]) (string, error) {
-	var answer string
+// TextResponse holds the concatenated text from a response stream,
+// separated into partial and final parts.
+type TextResponse struct {
+	// PartialText is the full text concatenated from all partial (streaming) responses.
+	PartialText string
+	// FinalText is the full text concatenated from all final (non-partial) responses.
+	FinalText string
+}
+
+// readResponse transforms a sequence into a TextResponse, concating the text value of the response parts
+// depending on the readPartial value it will only concat the text of partial events or the text of non partial events
+func readResponse(s iter.Seq2[*llm.Response, error]) (TextResponse, error) {
+	var partialBuilder, finalBuilder strings.Builder
+	var result TextResponse
+
 	for resp, err := range s {
 		if err != nil {
-			return answer, err
+			// Return what we have so far, along with the error.
+			result.PartialText = partialBuilder.String()
+			result.FinalText = finalBuilder.String()
+			return result, err
 		}
 		if resp.Content == nil || len(resp.Content.Parts) == 0 {
-			return answer, fmt.Errorf("encountered an empty response: %v", resp)
+			return result, fmt.Errorf("encountered an empty response: %v", resp)
 		}
-		answer += resp.Content.Parts[0].Text
+
+		text := resp.Content.Parts[0].Text
+		if resp.Partial {
+			partialBuilder.WriteString(text)
+		} else {
+			finalBuilder.WriteString(text)
+		}
 	}
-	return answer, nil
+
+	result.PartialText = partialBuilder.String()
+	result.FinalText = finalBuilder.String()
+	return result, nil
 }
