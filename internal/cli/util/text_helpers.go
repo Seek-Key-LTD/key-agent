@@ -12,18 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// package config provides configs for the REST API server.
-package config
+// package util provides helper functions for execution of commands and presenting their stderr and stdout in uniform way
+package util
 
-import (
-	"google.golang.org/adk/artifactservice"
-	"google.golang.org/adk/cmd/restapi/services"
-	"google.golang.org/adk/sessionservice"
-)
+import "strings"
 
-// ADKAPIRouterConfigs contains the configs for the ADK API server.
-type ADKAPIRouterConfigs struct {
-	SessionService  sessionservice.Service
-	AgentLoader     services.AgentLoader
-	ArtifactService artifactservice.Service
+func CenterString(s string, w int) string {
+	sw := w - len(s)
+	lw := sw / 2
+	rw := sw - lw
+	return strings.Repeat(" ", lw) + s + strings.Repeat(" ", rw)
 }

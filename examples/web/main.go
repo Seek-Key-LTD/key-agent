@@ -83,7 +83,7 @@ func main() {
 	artifactservice := artifactservice.Mem()
 
 	config := web.ParseArgs()
-	fmt.Println(config)
+	fmt.Printf("%+v", config)
 	web.Serve(config, &web.ServeConfig{
 		SessionService:  sessionService,
 		AgentLoader:     agentLoader,
