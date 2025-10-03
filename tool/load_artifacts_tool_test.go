@@ -20,11 +20,11 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/adk/agent"
-	"google.golang.org/adk/internal/artifactsinternal"
+	artifactinternal "google.golang.org/adk/internal/artifact"
 	"google.golang.org/adk/internal/toolinternal"
 	"google.golang.org/adk/model"
 
-	"google.golang.org/adk/artifactservice"
+	"google.golang.org/adk/artifact"
 	"google.golang.org/adk/tool"
 	"google.golang.org/genai"
 )
@@ -285,8 +285,8 @@ func TestLoadArtifactsTool_ProcessRequest_Artifacts_OtherFunctionCall(t *testing
 func createToolContext(t *testing.T) tool.Context {
 	t.Helper()
 
-	artifacts := &artifactsinternal.Artifacts{
-		Service:   artifactservice.Mem(),
+	artifacts := &artifactinternal.Artifacts{
+		Service:   artifact.InMemoryService(),
 		AppName:   "app",
 		UserID:    "user",
 		SessionID: "session",

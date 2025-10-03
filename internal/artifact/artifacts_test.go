@@ -12,20 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package artifactsinternal_test
+package artifact_test
 
 import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
-	"google.golang.org/adk/artifactservice"
-	"google.golang.org/adk/internal/artifactsinternal"
+	"google.golang.org/adk/artifact"
+	artifactinternal "google.golang.org/adk/internal/artifact"
 	"google.golang.org/genai"
 )
 
 func TestArtifacts(t *testing.T) {
-	a := artifactsinternal.Artifacts{
-		Service:   artifactservice.Mem(),
+	a := artifactinternal.Artifacts{
+		Service:   artifact.InMemoryService(),
 		AppName:   "testApp",
 		UserID:    "testUser",
 		SessionID: "testSession",
@@ -61,8 +61,8 @@ func TestArtifacts(t *testing.T) {
 }
 
 func TestArtifacts_WithLoadVersion(t *testing.T) {
-	a := artifactsinternal.Artifacts{
-		Service:   artifactservice.Mem(),
+	a := artifactinternal.Artifacts{
+		Service:   artifact.InMemoryService(),
 		AppName:   "testApp",
 		UserID:    "testUser",
 		SessionID: "testSession",
@@ -90,8 +90,8 @@ func TestArtifacts_WithLoadVersion(t *testing.T) {
 }
 
 func TestArtifacts_Errors(t *testing.T) {
-	a := artifactsinternal.Artifacts{
-		Service:   artifactservice.Mem(),
+	a := artifactinternal.Artifacts{
+		Service:   artifact.InMemoryService(),
 		AppName:   "testApp",
 		UserID:    "testUser",
 		SessionID: "testSession",

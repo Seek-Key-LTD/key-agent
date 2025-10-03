@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package artifactservice
+package artifact
 
 import (
 	"context"
@@ -37,7 +37,7 @@ type inMemoryService struct {
 	artifacts omap.Map[string, *genai.Part]
 }
 
-func Mem() Service {
+func InMemoryService() Service {
 	return &inMemoryService{}
 }
 
