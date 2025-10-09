@@ -24,6 +24,7 @@ import (
 	"google.golang.org/adk/internal/agent/parentmap"
 	"google.golang.org/adk/internal/agent/runconfig"
 	icontext "google.golang.org/adk/internal/context"
+	"google.golang.org/adk/internal/telemetry"
 	"google.golang.org/adk/internal/toolinternal"
 	"google.golang.org/adk/internal/utils"
 	"google.golang.org/adk/model"
@@ -104,7 +105,7 @@ func (f *Flow) runOneStep(ctx agent.InvocationContext) iter.Seq2[*session.Event,
 			yield(nil, err)
 			return
 		}
-
+		spans := telemetry.StartTrace(ctx, "call_llm")
 		// Calls the LLM.
 		for resp, err := range f.callLLM(ctx, req) {
 			if err != nil {
@@ -136,6 +137,7 @@ func (f *Flow) runOneStep(ctx agent.InvocationContext) iter.Seq2[*session.Event,
 
 			// Build the event and yield.
 			modelResponseEvent := f.finalizeModelResponseEvent(ctx, resp, tools)
+			telemetry.TraceLLMCall(spans, ctx, req, modelResponseEvent)
 			if !yield(modelResponseEvent, nil) {
 				return
 			}
@@ -359,6 +361,7 @@ func handleFunctionCalls(ctx agent.InvocationContext, toolsDict map[string]tool.
 		toolCtx := toolinternal.NewToolContext(ctx, fnCall.ID, &session.EventActions{})
 		//toolCtx := tool.
 		// TODO: agent.canonical_before_tool_callbacks
+		spans := telemetry.StartTrace(ctx, "execute_tool "+fnCall.Name)
 		result, err := funcTool.Run(toolCtx, fnCall.Args)
 		// genai.FunctionResponse expects to use "output" key to specify function output
 		// and "error" key to specify error details (if any). If "output" and "error" keys
@@ -393,9 +396,17 @@ func handleFunctionCalls(ctx agent.InvocationContext, toolsDict map[string]tool.
 		ev.Author = ctx.Agent().Name()
 		ev.Branch = ctx.Branch()
 		ev.Actions = *toolCtx.Actions()
+		telemetry.TraceToolCall(spans, curTool, fnCall.Args, ev)
 		fnResponseEvents = append(fnResponseEvents, ev)
 	}
-	return mergeParallelFunctionResponseEvents(fnResponseEvents)
+	mergedEvent, err := mergeParallelFunctionResponseEvents(fnResponseEvents)
+	if err != nil {
+		return mergedEvent, err
+	}
+	// this is needed for debug traces of parallel calls
+	spans := telemetry.StartTrace(ctx, "execute_tool (merged)")
+	telemetry.TraceMergedToolCalls(spans, mergedEvent)
+	return mergedEvent, nil
 }
 
 func mergeParallelFunctionResponseEvents(events []*session.Event) (*session.Event, error) {
