@@ -23,6 +23,8 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/adk/agent"
 	"google.golang.org/adk/agent/llmagent"
+	"google.golang.org/adk/agent/workflowagents/parallelagent"
+	"google.golang.org/adk/agent/workflowagents/sequentialagent"
 	"google.golang.org/adk/internal/agent/parentmap"
 	icontext "google.golang.org/adk/internal/context"
 	"google.golang.org/adk/internal/llminternal"
@@ -333,6 +335,72 @@ func TestAgentTransferRequestProcessor(t *testing.T) {
 		}))
 
 		check(t, curAgent, root, "", nil, []string{"Parent", "Peer", "Current"})
+	})
+
+	t.Run("AgentWithParallelParent", func(t *testing.T) {
+		curAgent := utils.Must(llmagent.New(llmagent.Config{
+			Name:                     "Current",
+			Model:                    llm,
+			DisallowTransferToParent: false,
+			DisallowTransferToPeers:  false,
+		}))
+		peer := utils.Must(llmagent.New(llmagent.Config{
+			Name:  "Peer",
+			Model: llm,
+		}))
+		root := utils.Must(parallelagent.New(parallelagent.Config{
+			AgentConfig: agent.Config{
+				Name:      "Parent",
+				SubAgents: []agent.Agent{curAgent, peer},
+			},
+		}))
+
+		check(t, curAgent, root, "", nil, []string{"Parent", "Peer", "Current"})
+	})
+
+	t.Run("AgentWithSequentialParent", func(t *testing.T) {
+		curAgent := utils.Must(llmagent.New(llmagent.Config{
+			Name:                     "Current",
+			Model:                    llm,
+			DisallowTransferToParent: false,
+			DisallowTransferToPeers:  false,
+		}))
+		peer := utils.Must(llmagent.New(llmagent.Config{
+			Name:  "Peer",
+			Model: llm,
+		}))
+		root := utils.Must(sequentialagent.New(sequentialagent.Config{
+			AgentConfig: agent.Config{
+				Name:      "Parent",
+				SubAgents: []agent.Agent{curAgent, peer},
+			},
+		}))
+
+		check(t, curAgent, root, "", nil, []string{"Parent", "Peer", "Current"})
+	})
+
+	t.Run("AgentWithSequentialSubagent", func(t *testing.T) {
+		seqSub := utils.Must(llmagent.New(llmagent.Config{
+			Name:  "Sub3",
+			Model: llm,
+		}))
+		agent := utils.Must(llmagent.New(llmagent.Config{
+			Name:  "Current",
+			Model: llm,
+			SubAgents: []agent.Agent{
+				utils.Must(sequentialagent.New(sequentialagent.Config{
+					AgentConfig: agent.Config{
+						Name:      "Sub1",
+						SubAgents: []agent.Agent{seqSub},
+					},
+				})),
+				utils.Must(llmagent.New(llmagent.Config{
+					Name:  "Sub2",
+					Model: llm,
+				})),
+			},
+		}))
+		check(t, agent, agent, "", []string{"Sub1", "Sub2"}, []string{"Current"})
 	})
 }
 
