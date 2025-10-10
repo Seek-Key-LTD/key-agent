@@ -17,6 +17,7 @@ package llmagent
 import (
 	"fmt"
 	"iter"
+	"strings"
 
 	"google.golang.org/adk/agent"
 	agentinternal "google.golang.org/adk/internal/agent"
@@ -55,6 +56,7 @@ func New(cfg Config) (agent.Agent, error) {
 			IncludeContents:          cfg.IncludeContents,
 			Instruction:              cfg.Instruction,
 			GlobalInstruction:        cfg.GlobalInstruction,
+			OutputKey:                cfg.OutputKey,
 		},
 	}
 
@@ -133,7 +135,12 @@ type Config struct {
 	// TODO: BeforeTool and AfterTool callbacks
 	Tools []tool.Tool
 
-	// OutputKey
+	// OutputKey is an optional parameter to specify the key in session state for the agent output.
+	//
+	// Typical uses cases are:
+	// - Extracts agent reply for later use, such as in tools, callbacks, etc.
+	// - Connects agents to coordinate with each other.
+	OutputKey string
 	// Planner
 	// CodeExecutor
 	// Examples
@@ -179,5 +186,49 @@ func (a *llmAgent) run(ctx agent.InvocationContext) iter.Seq2[*session.Event, er
 		AfterModelCallbacks:  a.afterModel,
 	}
 
-	return f.Run(ctx)
+	return func(yield func(*session.Event, error) bool) {
+		for ev, err := range f.Run(ctx) {
+			a.maybeSaveOutputToState(ev)
+			if !yield(ev, err) {
+				return
+			}
+		}
+	}
+}
+
+// maybeSaveOutputToState saves the model output to state if needed. skip if the event
+// was authored by some other agent (e.g. current agent transferred to another agent)
+func (a *llmAgent) maybeSaveOutputToState(event *session.Event) {
+	if event == nil {
+		return
+	}
+	if event.Author != a.Name() {
+		// TODO: log "Skipping output save for agent %s: event authored by %s"
+		return
+	}
+	if a.OutputKey != "" && !event.Partial && event.Content != nil && len(event.Content.Parts) > 0 {
+		var sb strings.Builder
+		for _, part := range event.Content.Parts {
+			if part.Text != "" && !part.Thought {
+				sb.WriteString(part.Text)
+			}
+		}
+		result := sb.String()
+
+		// TODO: add output schema validation and unmarshalling
+		if a.OutputSchema != nil {
+			// If the result from the final chunk is just whitespace or empty,
+			// it means this is an empty final chunk of a stream.
+			// Do not attempt to parse it as JSON.
+			if strings.TrimSpace(result) == "" {
+				return
+			}
+		}
+
+		if event.Actions.StateDelta == nil {
+			event.Actions.StateDelta = make(map[string]any)
+		}
+
+		event.Actions.StateDelta[a.OutputKey] = result
+	}
 }
