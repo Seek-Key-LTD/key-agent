@@ -41,10 +41,12 @@ func New(cfg Config) (agent.Agent, error) {
 	}
 
 	a := &llmAgent{
-		beforeModel: beforeModel,
-		model:       cfg.Model,
-		afterModel:  afterModel,
-		instruction: cfg.Instruction,
+		beforeModel:  beforeModel,
+		model:        cfg.Model,
+		afterModel:   afterModel,
+		instruction:  cfg.Instruction,
+		inputSchema:  cfg.InputSchema,
+		outputSchema: cfg.OutputSchema,
 
 		State: llminternal.State{
 			Model:                    cfg.Model,
@@ -52,6 +54,7 @@ func New(cfg Config) (agent.Agent, error) {
 			Tools:                    cfg.Tools,
 			DisallowTransferToParent: cfg.DisallowTransferToParent,
 			DisallowTransferToPeers:  cfg.DisallowTransferToPeers,
+			InputSchema:              cfg.InputSchema,
 			OutputSchema:             cfg.OutputSchema,
 			IncludeContents:          cfg.IncludeContents,
 			Instruction:              cfg.Instruction,
@@ -124,6 +127,7 @@ type Config struct {
 	// user messages, tool requests, etc.
 	IncludeContents string
 
+	// TODO(ngeorgy): consider to switch to jsonschema for input and output schema.
 	// The input schema when agent is used as a tool.
 	InputSchema *genai.Schema
 	// The output schema when agent replies.
@@ -162,6 +166,9 @@ type llmAgent struct {
 	model       model.LLM
 	afterModel  []llminternal.AfterModelCallback
 	instruction string
+
+	inputSchema  *genai.Schema
+	outputSchema *genai.Schema
 }
 
 type agentState = agentinternal.State
