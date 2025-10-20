@@ -18,27 +18,21 @@ import (
 	"encoding/json"
 
 	"github.com/a2aproject/a2a-go/a2asrv"
-	"google.golang.org/adk/runner"
 	"google.golang.org/adk/session"
 )
 
-type ExecutorConfig runner.Config
-
 type invocationMeta struct {
-	//lint:ignore U1000
-	userID string
-	//lint:ignore U1000
+	userID    string
 	sessionID string
 	eventMeta map[string]any
 }
 
-//lint:ignore U1000
-func toInvocationMeta(config *ExecutorConfig, reqCtx a2asrv.RequestContext) invocationMeta {
+func toInvocationMeta(config ExecutorConfig, reqCtx *a2asrv.RequestContext) invocationMeta {
 	// TODO(yarolegovich): update once A2A provides auth data extraction from Context
 	userID, sessionID := "A2A_USER_"+reqCtx.ContextID, reqCtx.ContextID
 
 	m := map[string]any{
-		toMetaKey("app_name"):   config.AppName,
+		toMetaKey("app_name"):   config.RunnerConfig.AppName,
 		toMetaKey("user_id"):    userID,
 		toMetaKey("session_id"): sessionID,
 	}

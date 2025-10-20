@@ -29,7 +29,7 @@ import (
 
 type eventProcessor struct {
 	task   *a2a.Task
-	reqCtx a2asrv.RequestContext
+	reqCtx *a2asrv.RequestContext
 	meta   invocationMeta
 
 	// Created once the first TaskArtifactUpdateEvent is sent. Used for subsequent artifact updates.
@@ -43,7 +43,7 @@ type eventProcessor struct {
 	terminalEvents map[a2a.TaskState]*a2a.TaskStatusUpdateEvent
 }
 
-func newEventProcessor(task *a2a.Task, reqCtx a2asrv.RequestContext, meta invocationMeta) *eventProcessor {
+func newEventProcessor(task *a2a.Task, reqCtx *a2asrv.RequestContext, meta invocationMeta) *eventProcessor {
 	return &eventProcessor{
 		task: task, reqCtx: reqCtx, meta: meta,
 		terminalEvents: make(map[a2a.TaskState]*a2a.TaskStatusUpdateEvent),
@@ -123,7 +123,6 @@ func (p *eventProcessor) makeTerminalEvents() []a2a.Event {
 	return result
 }
 
-//lint:ignore U1000
 func (p *eventProcessor) makeTaskFailedEvent(cause error, event *session.Event) *a2a.TaskStatusUpdateEvent {
 	meta := p.meta.eventMeta
 	if event != nil {
