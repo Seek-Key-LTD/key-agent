@@ -17,6 +17,7 @@ package remoteagent
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"iter"
 	"net"
@@ -72,7 +73,9 @@ func startA2AServer(t *testing.T, agentExecutor a2asrv.AgentExecutor, listener *
 
 	grpcHandler.RegisterWith(s)
 	if err := s.Serve(listener); err != nil {
-		t.Errorf("Server exited with error: %v", err)
+		if !errors.Is(err, grpc.ErrServerStopped) {
+			t.Errorf("Server exited with error: %v", err)
+		}
 	}
 }
 
@@ -86,7 +89,7 @@ func newTestClientFactory(listener *bufconn.Listener) *a2aclient.Factory {
 
 func newRemoteAgent(t *testing.T, name string, listener *bufconn.Listener) agent.Agent {
 	t.Helper()
-	card := &a2a.AgentCard{PreferredTransport: a2a.TransportProtocolGRPC, URL: "passthrough:///bufnet"}
+	card := &a2a.AgentCard{PreferredTransport: a2a.TransportProtocolGRPC, URL: "passthrough:///bufnet", Capabilities: a2a.AgentCapabilities{Streaming: true}}
 	clientFactory := newTestClientFactory(listener)
 	agent, err := New(A2AConfig{Name: name, AgentCard: card, ClientFactory: clientFactory})
 	if err != nil {
@@ -501,7 +504,7 @@ func TestRemoteAgent_ResolvesAgentCard(t *testing.T) {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/.well-known/agent-card.json", func(w http.ResponseWriter, r *http.Request) {
-		card := &a2a.AgentCard{PreferredTransport: a2a.TransportProtocolGRPC, URL: "passthrough:///bufnet"}
+		card := &a2a.AgentCard{PreferredTransport: a2a.TransportProtocolGRPC, URL: "passthrough:///bufnet", Capabilities: a2a.AgentCapabilities{Streaming: true}}
 		if err := json.NewEncoder(w).Encode(card); err != nil {
 			t.Errorf("json.Encode(agentCard) error = %v", err)
 		}
