@@ -59,7 +59,7 @@ func TestAgentCallbacks(t *testing.T) {
 				},
 			},
 			afterAgent: []AfterAgentCallback{
-				func(CallbackContext, *session.Event, error) (*genai.Content, error) {
+				func(CallbackContext) (*genai.Content, error) {
 					return nil, nil
 				},
 			},
@@ -74,14 +74,20 @@ func TestAgentCallbacks(t *testing.T) {
 			},
 		},
 		{
-			name: "after agent callback replaces event content",
+			name: "after agent callback create a new event with new content",
 			afterAgent: []AfterAgentCallback{
-				func(CallbackContext, *session.Event, error) (*genai.Content, error) {
+				func(CallbackContext) (*genai.Content, error) {
 					return genai.NewContentFromText("hello from after_agent_callback", genai.RoleModel), nil
 				},
 			},
 			wantLLMCalls: 1,
 			wantEvents: []*session.Event{
+				{
+					Author: "test",
+					LLMResponse: model.LLMResponse{
+						Content: genai.NewContentFromText("hello", genai.RoleModel),
+					},
+				},
 				{
 					Author: "test",
 					LLMResponse: model.LLMResponse{
@@ -127,7 +133,8 @@ func TestAgentCallbacks(t *testing.T) {
 			}
 
 			for i, gotEvent := range gotEvents {
-				if diff := cmp.Diff(tt.wantEvents[i], gotEvent, cmpopts.IgnoreFields(session.Event{}, "ID", "Timestamp", "InvocationID")); diff != "" {
+				if diff := cmp.Diff(tt.wantEvents[i], gotEvent, cmpopts.IgnoreFields(session.Event{}, "ID", "Timestamp", "InvocationID"),
+					cmpopts.IgnoreFields(session.EventActions{}, "StateDelta")); diff != "" {
 					t.Errorf("diff in the events: got event[%d]: %v, want: %v, diff: %v", i, gotEvent, tt.wantEvents[i], diff)
 				}
 			}

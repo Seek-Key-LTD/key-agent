@@ -73,7 +73,7 @@ type Memory interface {
 }
 
 type BeforeAgentCallback func(CallbackContext) (*genai.Content, error)
-type AfterAgentCallback func(CallbackContext, *session.Event, error) (*genai.Content, error)
+type AfterAgentCallback func(CallbackContext) (*genai.Content, error)
 
 type agent struct {
 	agentinternal.State
@@ -116,19 +116,27 @@ func (a *agent) Run(ctx InvocationContext) iter.Seq2[*session.Event, error] {
 
 		event, err := runBeforeAgentCallbacks(ctx)
 		if event != nil || err != nil {
-			yield(event, err)
-			return
+			if !yield(event, err) {
+				return
+			}
+			// TODO replace with "if ctx.EndInvocation()" { once setter method is defined
+			if event.LLMResponse.Content != nil {
+				return
+			}
 		}
 
 		for event, err := range a.run(ctx) {
 			if event != nil && event.Author == "" {
 				event.Author = getAuthorForEvent(ctx, event)
 			}
-
-			event, err := runAfterAgentCallbacks(ctx, event, err)
 			if !yield(event, err) {
 				return
 			}
+		}
+
+		event, err = runAfterAgentCallbacks(ctx)
+		if event != nil || err != nil {
+			yield(event, err)
 		}
 	}
 }
@@ -155,7 +163,7 @@ func runBeforeAgentCallbacks(ctx InvocationContext) (*session.Event, error) {
 	callbackCtx := &callbackContext{
 		Context:           ctx,
 		invocationContext: ctx,
-		actions:           &session.EventActions{},
+		actions:           &session.EventActions{StateDelta: make(map[string]any)},
 	}
 
 	for _, callback := range ctx.Agent().internal().beforeAgentCallbacks {
@@ -173,30 +181,37 @@ func runBeforeAgentCallbacks(ctx InvocationContext) (*session.Event, error) {
 		}
 		event.Author = agent.Name()
 		event.Branch = ctx.Branch()
-		// TODO: how to set it. Should it be a part of Context?
-		// event.Actions = callbackContext.EventActions
+		event.Actions = *callbackCtx.actions
+		// TODO set context invocation ended
+		// ctx.invocationEnded = true
+		return event, nil
+	}
 
-		// TODO: set ictx.end_invocation
-
+	// check if has delta create event with it
+	if len(callbackCtx.actions.StateDelta) > 0 {
+		event := session.NewEvent(ctx.InvocationID())
+		event.Author = agent.Name()
+		event.Branch = ctx.Branch()
+		event.Actions = *callbackCtx.actions
 		return event, nil
 	}
 
 	return nil, nil
 }
 
-// runAfterAgentCallbacks checks if any afterAgentCallback returns non-nil content
-// then it replaces the event content with a value from the callback.
-func runAfterAgentCallbacks(ctx InvocationContext, agentEvent *session.Event, agentError error) (*session.Event, error) {
+// runAfterAgentCallbacks checks if any afterAgentCallback returns non-nil content or a state modification
+// then it create a new event with the new content and state delta.
+func runAfterAgentCallbacks(ctx InvocationContext) (*session.Event, error) {
 	agent := ctx.Agent()
 
 	callbackCtx := &callbackContext{
 		Context:           ctx,
 		invocationContext: ctx,
-		actions:           &session.EventActions{},
+		actions:           &session.EventActions{StateDelta: make(map[string]any)},
 	}
 
 	for _, callback := range agent.internal().afterAgentCallbacks {
-		newContent, err := callback(callbackCtx, agentEvent, agentError)
+		newContent, err := callback(callbackCtx)
 		if err != nil {
 			return nil, fmt.Errorf("failed to run after agent callback: %w", err)
 		}
@@ -204,11 +219,27 @@ func runAfterAgentCallbacks(ctx InvocationContext, agentEvent *session.Event, ag
 			continue
 		}
 
-		agentEvent.LLMResponse.Content = newContent
-		return agentEvent, nil
+		event := session.NewEvent(ctx.InvocationID())
+		event.LLMResponse = model.LLMResponse{
+			Content: newContent,
+		}
+		event.Author = agent.Name()
+		event.Branch = ctx.Branch()
+		event.Actions = *callbackCtx.actions
+		// TODO set context invocation ended
+		// ctx.invocationEnded = true
+		return event, nil
 	}
 
-	return agentEvent, agentError
+	// check if has delta create event with it
+	if len(callbackCtx.actions.StateDelta) > 0 {
+		event := session.NewEvent(ctx.InvocationID())
+		event.Author = agent.Name()
+		event.Branch = ctx.Branch()
+		event.Actions = *callbackCtx.actions
+		return event, nil
+	}
+	return nil, nil
 }
 
 // TODO: unify with internal/context.callbackContext
@@ -228,7 +259,7 @@ func (c *callbackContext) ReadonlyState() session.ReadonlyState {
 }
 
 func (c *callbackContext) State() session.State {
-	return c.invocationContext.Session().State()
+	return &callbackContextState{ctx: c}
 }
 
 func (c *callbackContext) Artifacts() Artifacts {
@@ -264,6 +295,30 @@ func (c *callbackContext) UserID() string {
 }
 
 var _ CallbackContext = (*callbackContext)(nil)
+
+type callbackContextState struct {
+	ctx *callbackContext
+}
+
+func (c *callbackContextState) Get(key string) (any, error) {
+	if c.ctx.actions != nil && c.ctx.actions.StateDelta != nil {
+		if val, ok := c.ctx.actions.StateDelta[key]; ok {
+			return val, nil
+		}
+	}
+	return c.ctx.invocationContext.Session().State().Get(key)
+}
+
+func (c *callbackContextState) Set(key string, val any) error {
+	if c.ctx.actions != nil && c.ctx.actions.StateDelta != nil {
+		c.ctx.actions.StateDelta[key] = val
+	}
+	return c.ctx.invocationContext.Session().State().Set(key, val)
+}
+
+func (c *callbackContextState) All() iter.Seq2[string, any] {
+	return c.ctx.invocationContext.Session().State().All()
+}
 
 type invocationContext struct {
 	context.Context
