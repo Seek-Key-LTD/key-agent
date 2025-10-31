@@ -93,6 +93,7 @@ func New(cfg Config) (agent.Agent, error) {
 
 	a.Agent = baseAgent
 	a.AgentType = agentinternal.TypeLLMAgent
+	a.Config = cfg
 
 	return a, nil
 }

@@ -69,10 +69,8 @@ func (e *Executor) Execute(ctx context.Context, reqCtx *a2asrv.RequestContext, q
 		return fmt.Errorf("failed to create a runner: %w", err)
 	}
 
-	task := reqCtx.Task
-	if task == nil {
-		task = &a2a.Task{ID: reqCtx.TaskID, ContextID: reqCtx.ContextID}
-		event := a2a.NewStatusUpdateEvent(task, a2a.TaskStateSubmitted, nil)
+	if reqCtx.StoredTask == nil {
+		event := a2a.NewStatusUpdateEvent(reqCtx, a2a.TaskStateSubmitted, nil)
 		if err := queue.Write(ctx, event); err != nil {
 			return fmt.Errorf("failed to setup a task: %w", err)
 		}
@@ -81,20 +79,20 @@ func (e *Executor) Execute(ctx context.Context, reqCtx *a2asrv.RequestContext, q
 	invocationMeta := toInvocationMeta(e.config, reqCtx)
 
 	if err := e.prepareSession(ctx, invocationMeta); err != nil {
-		event := toTaskFailedUpdateEvent(task, err, invocationMeta.eventMeta)
+		event := toTaskFailedUpdateEvent(reqCtx, err, invocationMeta.eventMeta)
 		if err := queue.Write(ctx, event); err != nil {
 			return err
 		}
 		return nil
 	}
 
-	event := a2a.NewStatusUpdateEvent(task, a2a.TaskStateWorking, nil)
+	event := a2a.NewStatusUpdateEvent(reqCtx, a2a.TaskStateWorking, nil)
 	event.Metadata = invocationMeta.eventMeta
 	if err := queue.Write(ctx, event); err != nil {
 		return err
 	}
 
-	processor := newEventProcessor(task, reqCtx, invocationMeta)
+	processor := newEventProcessor(reqCtx, invocationMeta)
 	if err := e.process(ctx, r, processor, content, queue); err != nil {
 		return err
 	}
@@ -103,11 +101,7 @@ func (e *Executor) Execute(ctx context.Context, reqCtx *a2asrv.RequestContext, q
 }
 
 func (e *Executor) Cancel(ctx context.Context, reqCtx *a2asrv.RequestContext, queue eventqueue.Queue) error {
-	task := reqCtx.Task
-	if task == nil {
-		return fmt.Errorf("no task provided")
-	}
-	event := a2a.NewStatusUpdateEvent(task, a2a.TaskStateCanceled, nil)
+	event := a2a.NewStatusUpdateEvent(reqCtx, a2a.TaskStateCanceled, nil)
 	if err := queue.Write(ctx, event); err != nil {
 		return err
 	}

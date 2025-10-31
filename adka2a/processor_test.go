@@ -253,7 +253,8 @@ func TestEventProcessor_Process(t *testing.T) {
 			cmpopts.IgnoreFields(a2a.TaskStatus{}, "Timestamp"),
 		}
 		t.Run(tc.name, func(t *testing.T) {
-			processor := newEventProcessor(task, &a2asrv.RequestContext{}, invocationMeta{})
+			reqCtx := &a2asrv.RequestContext{TaskID: task.ID, ContextID: task.ContextID}
+			processor := newEventProcessor(reqCtx, invocationMeta{})
 
 			var gotEvents []*a2a.TaskArtifactUpdateEvent
 			for _, event := range tc.events {
@@ -299,7 +300,8 @@ func TestEventProcessor_ArtifactUpdates(t *testing.T) {
 		},
 	}
 
-	processor := newEventProcessor(task, &a2asrv.RequestContext{}, invocationMeta{})
+	reqCtx := &a2asrv.RequestContext{TaskID: task.ID, ContextID: task.ContextID}
+	processor := newEventProcessor(reqCtx, invocationMeta{})
 	got := make([]*a2a.TaskArtifactUpdateEvent, len(events))
 	for i, event := range events {
 		processed, err := processor.process(t.Context(), event)

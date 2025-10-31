@@ -28,7 +28,6 @@ import (
 )
 
 type eventProcessor struct {
-	task   *a2a.Task
 	reqCtx *a2asrv.RequestContext
 	meta   invocationMeta
 
@@ -43,9 +42,10 @@ type eventProcessor struct {
 	terminalEvents map[a2a.TaskState]*a2a.TaskStatusUpdateEvent
 }
 
-func newEventProcessor(task *a2a.Task, reqCtx *a2asrv.RequestContext, meta invocationMeta) *eventProcessor {
+func newEventProcessor(reqCtx *a2asrv.RequestContext, meta invocationMeta) *eventProcessor {
 	return &eventProcessor{
-		task: task, reqCtx: reqCtx, meta: meta,
+		reqCtx:         reqCtx,
+		meta:           meta,
 		terminalEvents: make(map[a2a.TaskState]*a2a.TaskStatusUpdateEvent),
 	}
 }
@@ -64,7 +64,7 @@ func (p *eventProcessor) process(ctx context.Context, event *session.Event) (*a2
 	if resp.ErrorCode != "" {
 		// TODO(yarolegovich): consider merging responses if multiple errors can be produced during an invocation
 		if _, ok := p.terminalEvents[a2a.TaskStateFailed]; !ok {
-			p.terminalEvents[a2a.TaskStateFailed] = toTaskFailedUpdateEvent(p.task, errorFromResponse(&resp), eventMeta)
+			p.terminalEvents[a2a.TaskStateFailed] = toTaskFailedUpdateEvent(p.reqCtx, errorFromResponse(&resp), eventMeta)
 		}
 	}
 
@@ -73,7 +73,7 @@ func (p *eventProcessor) process(ctx context.Context, event *session.Event) (*a2
 	}
 
 	if isInputRequired(event, resp.Content.Parts) {
-		ev := a2a.NewStatusUpdateEvent(p.task, a2a.TaskStateInputRequired, nil)
+		ev := a2a.NewStatusUpdateEvent(p.reqCtx, a2a.TaskStateInputRequired, nil)
 		ev.Final = true
 		p.terminalEvents[a2a.TaskStateFailed] = ev
 	}
@@ -85,10 +85,10 @@ func (p *eventProcessor) process(ctx context.Context, event *session.Event) (*a2
 
 	var result *a2a.TaskArtifactUpdateEvent
 	if p.responseID == "" {
-		result = a2a.NewArtifactEvent(p.task, parts...)
+		result = a2a.NewArtifactEvent(p.reqCtx, parts...)
 		p.responseID = result.Artifact.ID
 	} else {
-		result = a2a.NewArtifactUpdateEvent(p.task, p.responseID, parts...)
+		result = a2a.NewArtifactUpdateEvent(p.reqCtx, p.responseID, parts...)
 	}
 	if len(eventMeta) > 0 {
 		result.Metadata = eventMeta
@@ -101,7 +101,7 @@ func (p *eventProcessor) makeTerminalEvents() []a2a.Event {
 	result := make([]a2a.Event, 0, 2)
 
 	if p.responseID != "" {
-		ev := a2a.NewArtifactUpdateEvent(p.task, p.responseID)
+		ev := a2a.NewArtifactUpdateEvent(p.reqCtx, p.responseID)
 		ev.LastChunk = true
 		result = append(result, ev)
 	}
@@ -113,7 +113,7 @@ func (p *eventProcessor) makeTerminalEvents() []a2a.Event {
 		}
 	}
 
-	ev := a2a.NewStatusUpdateEvent(p.task, a2a.TaskStateCompleted, nil)
+	ev := a2a.NewStatusUpdateEvent(p.reqCtx, a2a.TaskStateCompleted, nil)
 	ev.Metadata = p.meta.eventMeta
 	ev.Final = true
 	result = append(result, ev)
@@ -129,10 +129,10 @@ func (p *eventProcessor) makeTaskFailedEvent(cause error, event *session.Event) 
 			meta = eventMeta
 		}
 	}
-	return toTaskFailedUpdateEvent(p.task, cause, meta)
+	return toTaskFailedUpdateEvent(p.reqCtx, cause, meta)
 }
 
-func toTaskFailedUpdateEvent(task *a2a.Task, cause error, meta map[string]any) *a2a.TaskStatusUpdateEvent {
+func toTaskFailedUpdateEvent(task a2a.TaskInfoProvider, cause error, meta map[string]any) *a2a.TaskStatusUpdateEvent {
 	msg := a2a.NewMessageForTask(a2a.MessageRoleAgent, task, a2a.TextPart{Text: cause.Error()})
 	ev := a2a.NewStatusUpdateEvent(task, a2a.TaskStateFailed, msg)
 	ev.Metadata = meta

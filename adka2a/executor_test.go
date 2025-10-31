@@ -223,7 +223,7 @@ func TestExecutor_Execute(t *testing.T) {
 			queue := &testQueue{Queue: eventqueue.NewInMemoryQueue(10), writeErr: tc.queueWriteFails}
 			reqCtx := &a2asrv.RequestContext{TaskID: task.ID, ContextID: task.ContextID, Message: tc.request.Message}
 			if tc.request.Message != nil && tc.request.Message.TaskID == task.ID {
-				reqCtx.Task = task
+				reqCtx.StoredTask = task
 			}
 
 			err = executor.Execute(t.Context(), reqCtx, queue)
@@ -248,13 +248,9 @@ func TestExecutor_Cancel(t *testing.T) {
 	reqCtx := &a2asrv.RequestContext{TaskID: task.ID, ContextID: task.ContextID}
 
 	queue := &testQueue{Queue: eventqueue.NewInMemoryQueue(10)}
-	err := executor.Cancel(t.Context(), reqCtx, queue)
-	if err == nil {
-		t.Fatal("executor.Cancel() error = nil, want to fail when no Task in request")
-	}
 
-	reqCtx.Task = task
-	err = executor.Cancel(t.Context(), reqCtx, queue)
+	reqCtx.StoredTask = task
+	err := executor.Cancel(t.Context(), reqCtx, queue)
 	if err != nil {
 		t.Fatalf("executor.Cancel() error = %v, want nil", err)
 	}
