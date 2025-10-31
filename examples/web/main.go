@@ -24,7 +24,7 @@ import (
 	"google.golang.org/adk/agent/llmagent"
 	"google.golang.org/adk/artifact"
 	"google.golang.org/adk/cmd/launcher/adk"
-	"google.golang.org/adk/cmd/launcher/run"
+	"google.golang.org/adk/cmd/launcher/full"
 	"google.golang.org/adk/cmd/restapi/services"
 	"google.golang.org/adk/examples/web/agents"
 	"google.golang.org/adk/model"
@@ -75,14 +75,15 @@ func main() {
 	llmAuditor := agents.GetLLmAuditorAgent(ctx, model)
 	imageGeneratorAgent := agents.GetImageGeneratorAgent(ctx, model)
 
-	agentLoader := services.NewStaticAgentLoader(
+	agentLoader, err := services.NewMultiAgentLoader(
 		rootAgent,
-		map[string]agent.Agent{
-			"weather_time_agent": rootAgent,
-			"llm_auditor":        llmAuditor,
-			"image_generator":    imageGeneratorAgent,
-		},
+		llmAuditor,
+		imageGeneratorAgent,
 	)
+	if err != nil {
+		log.Fatalf("Failed to create agent loader: %v", err)
+	}
+
 	artifactservice := artifact.InMemoryService()
 
 	config := &adk.Config{
@@ -91,6 +92,9 @@ func main() {
 		AgentLoader:     agentLoader,
 	}
 
-	run.Run(ctx, config)
-
+	l := full.NewLauncher()
+	err = l.Execute(ctx, config, os.Args[1:])
+	if err != nil {
+		log.Fatalf("run failed: %v\n\n%s", err, l.CommandLineSyntax())
+	}
 }

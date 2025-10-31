@@ -12,18 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// package config provides configs for the REST API server.
-package config
+// package util provides helper functions for execution of commands and presenting their stderr and stdout in uniform way
+package util
 
 import (
-	"google.golang.org/adk/artifact"
-	"google.golang.org/adk/cmd/restapi/services"
-	"google.golang.org/adk/session"
+	"flag"
+	"strings"
 )
 
-// ADKAPIRouterConfigs contains the configs for the ADK API server.
-type ADKAPIRouterConfigs struct {
-	SessionService  session.Service
-	AgentLoader     services.AgentLoader
-	ArtifactService artifact.Service
+// FormatFlagUsage returns a string containing the usage information for the given FlagSet.
+func FormatFlagUsage(fs *flag.FlagSet) string {
+	var b strings.Builder
+	o := fs.Output()
+	fs.SetOutput(&b)
+	fs.PrintDefaults()
+	fs.SetOutput(o)
+	return b.String()
 }

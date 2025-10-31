@@ -12,22 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// package adk defines common config for all agents & ways of launching
-package adk
+// package prod provides easy way to play with ADK with all available options without development support (no console, no ADK Web UI )
+package prod
 
 import (
-	"github.com/a2aproject/a2a-go/a2asrv"
-	"google.golang.org/adk/artifact"
-	"google.golang.org/adk/cmd/restapi/services"
-	"google.golang.org/adk/memory"
-	"google.golang.org/adk/session"
+	"google.golang.org/adk/cmd/launcher"
+	"google.golang.org/adk/cmd/launcher/universal"
+	"google.golang.org/adk/cmd/launcher/web"
+	"google.golang.org/adk/cmd/launcher/web/a2a"
+	"google.golang.org/adk/cmd/launcher/web/api"
 )
 
-// Config contains parameters for web & console execution: sessions, artifacts, agents etc
-type Config struct {
-	SessionService  session.Service
-	ArtifactService artifact.Service
-	MemoryService   memory.Service
-	AgentLoader     services.AgentLoader
-	A2AOptions      []a2asrv.RequestHandlerOption
+// NewLaucher returnes universal launcher capable of serving api and a2a
+func NewLaucher() launcher.Launcher {
+	return universal.NewLauncher(web.NewLauncher(api.NewLauncher(), a2a.NewLauncher()))
 }

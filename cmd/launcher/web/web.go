@@ -12,62 +12,225 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// package web provides a way to run ADK using web server (extended by sublaunchers)
 package web
 
 import (
 	"context"
 	"flag"
 	"fmt"
+	"log"
+	"net/http"
+	"strings"
+	"time"
 
-	"google.golang.org/adk/cmd/launcher"
+	"github.com/gorilla/mux"
 	"google.golang.org/adk/cmd/launcher/adk"
+	"google.golang.org/adk/cmd/launcher/universal"
+	"google.golang.org/adk/internal/cli/util"
+	"google.golang.org/adk/session"
 )
 
-// WebConfig contains command-line params for web launcher
-type WebConfig struct {
-	LocalPort       int
-	FrontendAddress string
-	BackendAddress  string
-	ServeA2A        bool
+// WebConfig contains parametres for lauching web server
+type webConfig struct {
+	port int
 }
 
-// WebLauncher allows to interact with an agent in browser (using ADK Web UI and ADK REST API)
+// WebLauncher can launch web server
 type WebLauncher struct {
-	Config *WebConfig
+	flags        *flag.FlagSet
+	config       *webConfig
+	sublaunchers []WebSublauncher
+	// maps keyword to sublauncher for the keywords parsed from command line
+	activeSublaunchers map[string]WebSublauncher
 }
 
-// Run starts web server, serving everything required for interaction via web browser
-func (l WebLauncher) Run(ctx context.Context, config *adk.Config) error {
-	Serve(l.Config, config)
+// Execute implements launcher.Launcher.
+func (w *WebLauncher) Execute(ctx context.Context, config *adk.Config, args []string) error {
+	remainingArgs, err := w.Parse(args)
+	if err != nil {
+		return fmt.Errorf("cannot parse args: %w", err)
+	}
+	// do not accept additional arguments
+	err = universal.ErrorOnUnparsedArgs(remainingArgs)
+	if err != nil {
+		return fmt.Errorf("cannot parse all the arguments: %w", err)
+	}
+	return w.Run(ctx, config)
+}
+
+// WebSublauncher defines an interface for extending the WebLauncher.
+// Each sublauncher can add its own routes, wrap existing handlers, and parse its own command-line flags.
+type WebSublauncher interface {
+	Keyword() string
+	Parse(args []string) ([]string, error)
+	CommandLineSyntax() string
+	SimpleDescription() string
+
+	// SetupSubrouters adds sublauncher-specific routes to the router.
+	SetupSubrouters(router *mux.Router, adkConfig *adk.Config)
+	// WrapHandlers allows a sublauncher to wrap the main HTTP handler, for example to add middleware.
+	WrapHandlers(handler http.Handler, adkConfig *adk.Config) http.Handler
+	// UserMessage is a hook for sublaunchers to print a message to the user when the web server starts.
+	UserMessage(webUrl string, printer func(v ...any))
+}
+
+// CommandLineSyntax implements launcher.Launcher.
+func (w *WebLauncher) CommandLineSyntax() string {
+	var b strings.Builder
+	fmt.Fprint(&b, util.FormatFlagUsage(w.flags))
+	fmt.Fprintf(&b, "  You may specify sublaunchers:\n")
+	for _, l := range w.sublaunchers {
+		fmt.Fprintf(&b, "    * %s - %s\n", l.Keyword(), l.SimpleDescription())
+	}
+	fmt.Fprintf(&b, "  Sublaunchers syntax:\n")
+	for _, l := range w.sublaunchers {
+		fmt.Fprintf(&b, "    %s\n  %s\n", l.Keyword(), l.CommandLineSyntax())
+	}
+	return b.String()
+}
+
+// Keyword implements launcher.SubLauncher.
+func (w *WebLauncher) Keyword() string {
+	return "web"
+}
+
+// Parse implements launcher.SubLauncher. It parses the web launcher's flags
+// and then iterates through the remaining arguments to find and parse arguments
+// for any specified sublaunchers. It returns any arguments that are not processed.
+func (w *WebLauncher) Parse(args []string) ([]string, error) {
+
+	keyToSublauncher := make(map[string]WebSublauncher)
+	for _, l := range w.sublaunchers {
+		if _, ok := keyToSublauncher[l.Keyword()]; ok {
+			return nil, fmt.Errorf("cannot create universal launcher. Keywords for sublaunchers should be unique and they are not: '%s'", l.Keyword())
+		}
+		keyToSublauncher[l.Keyword()] = l
+	}
+
+	err := w.flags.Parse(args)
+	if err != nil || !w.flags.Parsed() {
+		return nil, fmt.Errorf("failed to parse web flags: %v", err)
+	}
+
+	restArgs := w.flags.Args()
+	w.activeSublaunchers = make(map[string]WebSublauncher)
+
+	for len(restArgs) > 0 {
+		keyword := restArgs[0]
+		if _, ok := w.activeSublaunchers[keyword]; ok {
+			// already processed
+			return restArgs, fmt.Errorf("the keyword %q is specified and processed more than once, which is not allowed", keyword)
+		}
+
+		if sublauncher, ok := keyToSublauncher[keyword]; ok {
+			// skip the keyword and move on
+			restArgs, err = sublauncher.Parse(restArgs[1:])
+			if err != nil {
+				return nil, fmt.Errorf("tha %q launcher cannot parse arguments: %v", keyword, err)
+			}
+			w.activeSublaunchers[keyword] = sublauncher
+		} else {
+			// not known keyword, let it be processed elsewhere
+			break
+		}
+	}
+	return restArgs, nil
+}
+
+// Run implements launcher.SubLauncher.
+func (w *WebLauncher) Run(ctx context.Context, config *adk.Config) error {
+	if config.SessionService == nil {
+		config.SessionService = session.InMemoryService()
+	}
+
+	router := BuildBaseRouter()
+
+	// check if there are any active sublaunchers
+	if len(w.activeSublaunchers) == 0 {
+		availableSublaunchers := make([]string, len(w.sublaunchers))
+		for i, l := range w.sublaunchers {
+			availableSublaunchers[i] = l.Keyword()
+		}
+		return fmt.Errorf("no active sublaunchers found - please specify them in the command line. Possible values: %v", availableSublaunchers)
+	}
+
+	// Setup subrouters
+	for _, l := range w.activeSublaunchers {
+		l.SetupSubrouters(router, config)
+	}
+
+	// allow sublaunchers to modify top level handler (needed by a2a)
+	var handler http.Handler = router
+	for _, l := range w.activeSublaunchers {
+		handler = l.WrapHandlers(handler, config)
+	}
+
+	log.Printf("Starting the web server: %+v", w.config)
+	log.Println()
+	webUrl := fmt.Sprintf("http://localhost:%v", fmt.Sprint(w.config.port))
+	log.Printf("Web servers starts on %s", webUrl)
+	for _, l := range w.activeSublaunchers {
+		l.UserMessage(webUrl, log.Println)
+	}
+	log.Println()
+
+	srv := http.Server{
+		Addr:         fmt.Sprintf(":%v", fmt.Sprint(w.config.port)),
+		WriteTimeout: time.Second * 15,
+		ReadTimeout:  time.Second * 15,
+		IdleTimeout:  time.Second * 60,
+		Handler:      handler,
+	}
+
+	err := srv.ListenAndServe()
+	if err != nil {
+		return fmt.Errorf("server failed: %v", err)
+	}
+
 	return nil
 }
 
-// BuildLauncher parses command line args and returns ready-to-run web launcher.
-func BuildLauncher(args []string) (launcher.Launcher, []string, error) {
-	webConfig, argsLeft, err := ParseArgs(args)
-	if err != nil {
-		return nil, nil, fmt.Errorf("cannot parse arguments for web: %v: %w", args, err)
-	}
-	return &WebLauncher{Config: webConfig}, argsLeft, nil
+// SimpleDescription implements launcher.SubLauncher.
+func (w *WebLauncher) SimpleDescription() string {
+	return "starts web server with additional sub-servers specified by sublaunchers"
 }
 
-func ParseArgs(args []string) (*WebConfig, []string, error) {
+// NewLauncher creates a new WebLauncher. It should be extended by providing
+// one or more WebSublaunchers that add the actual content and functionality.
+func NewLauncher(sublaunchers ...WebSublauncher) *WebLauncher {
+
+	config := &webConfig{}
+
 	fs := flag.NewFlagSet("web", flag.ContinueOnError)
+	fs.IntVar(&config.port, "port", 8080, "Localhost port for the server")
 
-	localPortFlag := fs.Int("port", 8080, "Localhost port for the server")
-	frontendAddressFlag := fs.String("webui_address", "localhost:8080", "ADK WebUI address as seen from the user browser. It's used to allow CORS requests. Please specify only hostname and (optionally) port.")
-	backendAddressFlag := fs.String("api_server_address", "http://localhost:8080/api", "ADK REST API server address as seen from the user browser. Please specify the whole URL, i.e. 'http://localhost:8080/api'. ")
-	serveA2A := fs.Bool("serve_a2a", false, "Run a gRPC A2A (Agent-To-Agent) server on the provided address. Will use golang.org/x/net/http2 for HTTP/2 support. Protocol specification can be found at https://a2a-protocol.org.")
+	return &WebLauncher{
+		config:       config,
+		flags:        fs,
+		sublaunchers: sublaunchers,
+	}
+}
 
-	err := fs.Parse(args)
-	if err != nil || !fs.Parsed() {
-		return &(WebConfig{}), nil, fmt.Errorf("failed to parse flags: %v", err)
-	}
-	res := WebConfig{
-		LocalPort:       *localPortFlag,
-		FrontendAddress: *frontendAddressFlag,
-		BackendAddress:  *backendAddressFlag,
-		ServeA2A:        *serveA2A,
-	}
-	return &res, fs.Args(), nil
+// logger is a middleware that logs the HTTP method, request URI, and the time taken to process the request.
+func logger(inner http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
+
+		inner.ServeHTTP(w, r)
+
+		log.Printf(
+			"%s %s %s",
+			r.Method,
+			r.RequestURI,
+			time.Since(start),
+		)
+	})
+}
+
+// BuildBaseRouter returns the main router, which can be extended by sub-routers.
+func BuildBaseRouter() *mux.Router {
+	router := mux.NewRouter().StrictSlash(true)
+	router.Use(logger)
+	return router
 }

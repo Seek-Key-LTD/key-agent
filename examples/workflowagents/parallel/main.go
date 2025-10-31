@@ -20,12 +20,13 @@ import (
 	"iter"
 	"log"
 	"math/rand/v2"
+	"os"
 	"time"
 
 	"google.golang.org/adk/agent"
 	"google.golang.org/adk/agent/workflowagents/parallelagent"
 	"google.golang.org/adk/cmd/launcher/adk"
-	"google.golang.org/adk/cmd/launcher/run"
+	"google.golang.org/adk/cmd/launcher/full"
 	"google.golang.org/adk/cmd/restapi/services"
 	"google.golang.org/adk/model"
 	"google.golang.org/adk/session"
@@ -67,7 +68,12 @@ func main() {
 	config := &adk.Config{
 		AgentLoader: services.NewSingleAgentLoader(parallelAgent),
 	}
-	run.Run(ctx, config)
+
+	l := full.NewLauncher()
+	err = l.Execute(ctx, config, os.Args[1:])
+	if err != nil {
+		log.Fatalf("run failed: %v\n\n%s", err, l.CommandLineSyntax())
+	}
 }
 
 type myAgent struct {

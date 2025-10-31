@@ -25,7 +25,7 @@ import (
 	"golang.org/x/oauth2"
 	"google.golang.org/adk/agent/llmagent"
 	"google.golang.org/adk/cmd/launcher/adk"
-	"google.golang.org/adk/cmd/launcher/run"
+	"google.golang.org/adk/cmd/launcher/full"
 	"google.golang.org/adk/cmd/restapi/services"
 	"google.golang.org/adk/model/gemini"
 	"google.golang.org/adk/tool"
@@ -86,7 +86,7 @@ func main() {
 	ctx := context.Background()
 
 	model, err := gemini.NewModel(ctx, "gemini-2.5-flash", &genai.ClientConfig{
-		APIKey: os.Getenv("GEMINI_API_KEY"),
+		APIKey: os.Getenv("GOOGLE_API_KEY"),
 	})
 	if err != nil {
 		log.Fatalf("Failed to create model: %v", err)
@@ -123,5 +123,10 @@ func main() {
 	config := &adk.Config{
 		AgentLoader: services.NewSingleAgentLoader(agent),
 	}
-	run.Run(ctx, config)
+	l := full.NewLauncher()
+	err = l.Execute(ctx, config, os.Args[1:])
+	if err != nil {
+		log.Fatalf("run failed: %v\n\n%s", err, l.CommandLineSyntax())
+	}
+
 }

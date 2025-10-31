@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// package console provides a simple way to test an agent from console application
+// package console provides a simple way to interact with an agent from console application
 package console
 
 import (
@@ -24,27 +24,40 @@ import (
 	"os"
 
 	"google.golang.org/adk/agent"
-	"google.golang.org/adk/cmd/launcher"
 	"google.golang.org/adk/cmd/launcher/adk"
+	"google.golang.org/adk/cmd/launcher/universal"
+	"google.golang.org/adk/internal/cli/util"
 	"google.golang.org/adk/runner"
 	"google.golang.org/adk/session"
 	"google.golang.org/genai"
 )
 
-// ConsoleConfig contains command-line params for console launcher
-type ConsoleConfig struct {
-	streamingMode agent.StreamingMode
-	rootAgentName string
+// consoleConfig contains command-line params for console launcher
+type consoleConfig struct {
+	streamingMode       agent.StreamingMode
+	streamingModeString string // command-line param to be converted to agent.StreamingMode
 }
 
 // ConsoleLauncher allows to interact with an agent in console
 type ConsoleLauncher struct {
-	Config *ConsoleConfig
+	flags  *flag.FlagSet
+	config *consoleConfig
 }
 
-// Run starts console loop. User-provided text is fed to the chosen agent (the only one if there's only one, specified by name otherwise)
-func (l ConsoleLauncher) Run(ctx context.Context, config *adk.Config) error {
-	userID, appName := "test_user", "test_app"
+// NewLauncher creates new console launcher
+func NewLauncher() *ConsoleLauncher {
+	config := &consoleConfig{}
+
+	fs := flag.NewFlagSet("console", flag.ContinueOnError)
+	fs.StringVar(&config.streamingModeString, "streaming_mode", string(agent.StreamingModeSSE),
+		fmt.Sprintf("defines streaming mode (%s|%s|%s)", agent.StreamingModeNone, agent.StreamingModeSSE, agent.StreamingModeBidi))
+
+	return &ConsoleLauncher{config: config, flags: fs}
+}
+
+// Run implements launcher.SubLauncher. It starts the console interaction loop.
+func (l *ConsoleLauncher) Run(ctx context.Context, config *adk.Config) error {
+	userID, appName := "console_user", "console_app"
 
 	sessionService := config.SessionService
 	if sessionService == nil {
@@ -59,16 +72,13 @@ func (l ConsoleLauncher) Run(ctx context.Context, config *adk.Config) error {
 		return fmt.Errorf("failed to create the session service: %v", err)
 	}
 
-	matchingAgent, err := config.AgentLoader.LoadAgent(l.Config.rootAgentName)
-	if err != nil {
-		return fmt.Errorf("failed to find the matching agent: %v", err)
-	}
+	rootAgent := config.AgentLoader.RootAgent()
 
 	session := resp.Session
 
 	r, err := runner.New(runner.Config{
 		AppName:         appName,
-		Agent:           matchingAgent,
+		Agent:           rootAgent,
 		SessionService:  sessionService,
 		ArtifactService: config.ArtifactService,
 	})
@@ -88,7 +98,7 @@ func (l ConsoleLauncher) Run(ctx context.Context, config *adk.Config) error {
 
 		userMsg := genai.NewContentFromText(userInput, genai.RoleUser)
 
-		streamingMode := l.Config.streamingMode
+		streamingMode := l.config.streamingMode
 		if streamingMode == "" {
 			streamingMode = agent.StreamingModeSSE
 		}
@@ -110,33 +120,48 @@ func (l ConsoleLauncher) Run(ctx context.Context, config *adk.Config) error {
 	}
 }
 
-// BuildLauncher parses command line args and returns ready-to-run console launcher.
-func BuildLauncher(args []string) (launcher.Launcher, []string, error) {
-	consoleConfig, argsLeft, err := ParseArgs(args)
-	if err != nil {
-		return nil, nil, fmt.Errorf("cannot parse arguments for console: %v: %w", args, err)
+// Parse implements launcher.SubLauncher. After parsing console-specific
+// arguments returns remaining un-parsed arguments
+func (l *ConsoleLauncher) Parse(args []string) ([]string, error) {
+	err := l.flags.Parse(args)
+	if err != nil || !l.flags.Parsed() {
+		return nil, fmt.Errorf("failed to parse flags: %v", err)
 	}
-	return &ConsoleLauncher{Config: consoleConfig}, argsLeft, nil
+	if l.config.streamingModeString != string(agent.StreamingModeNone) &&
+		l.config.streamingModeString != string(agent.StreamingModeSSE) &&
+		l.config.streamingModeString != string(agent.StreamingModeBidi) {
+		return nil, fmt.Errorf("invalid streaming_mode: %v. Should be (%s|%s|%s)", l.config.streamingModeString,
+			agent.StreamingModeNone, agent.StreamingModeSSE, agent.StreamingModeBidi)
+	}
+	l.config.streamingMode = agent.StreamingMode(l.config.streamingModeString)
+	return l.flags.Args(), nil
 }
 
-func ParseArgs(args []string) (*ConsoleConfig, []string, error) {
-	fs := flag.NewFlagSet("console", flag.ContinueOnError)
+// Keyword implements launcher.SubLauncher.
+func (l *ConsoleLauncher) Keyword() string {
+	return "console"
+}
 
-	var streaming = ""
-	var rootAgentName = ""
-	fs.StringVar(&streaming, "streaming_mode", string(agent.StreamingModeSSE), fmt.Sprintf("defines streaming mode (%s|%s|%s)", agent.StreamingModeNone, agent.StreamingModeSSE, agent.StreamingModeBidi))
-	fs.StringVar(&rootAgentName, "root_agent_name", "", "If you have multiple agents you should specify which one should be user for interactions. You can leave if empty if you have only one agent - it will be used by default")
+// CommandLineSyntax implements launcher.SubLauncher.
+func (l *ConsoleLauncher) CommandLineSyntax() string {
+	return util.FormatFlagUsage(l.flags)
+}
 
-	err := fs.Parse(args)
-	if err != nil || !fs.Parsed() {
-		return &(ConsoleConfig{}), nil, fmt.Errorf("failed to parse flags: %v", err)
+// SimpleDescription implements launcher.SubLauncher.
+func (l *ConsoleLauncher) SimpleDescription() string {
+	return "runs an agent in console mode."
+}
+
+// Execute implements launcher.Launcher. It parses arguments and runs the launcher.
+func (l *ConsoleLauncher) Execute(ctx context.Context, config *adk.Config, args []string) error {
+	remainingArgs, err := l.Parse(args)
+	if err != nil {
+		return fmt.Errorf("cannot parse args: %w", err)
 	}
-	if streaming != string(agent.StreamingModeNone) && streaming != string(agent.StreamingModeSSE) && streaming != string(agent.StreamingModeBidi) {
-		return &(ConsoleConfig{}), nil, fmt.Errorf("invalid streaming_mode: %v. Should be (%s|%s|%s)", streaming, agent.StreamingModeNone, agent.StreamingModeSSE, agent.StreamingModeBidi)
+	// do not accept additional arguments
+	err = universal.ErrorOnUnparsedArgs(remainingArgs)
+	if err != nil {
+		return fmt.Errorf("cannot parse all the arguments: %w", err)
 	}
-	res := ConsoleConfig{
-		streamingMode: agent.StreamingMode(streaming),
-		rootAgentName: rootAgentName,
-	}
-	return &res, fs.Args(), nil
+	return l.Run(ctx, config)
 }

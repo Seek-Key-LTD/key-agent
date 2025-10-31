@@ -20,68 +20,90 @@ import (
 	"google.golang.org/adk/agent"
 )
 
+// AgentLoader allows to load a particular agent by name and get the root agent
 type AgentLoader interface {
-	Root() agent.Agent
+	// ListAgents returns a list of names of all agents
 	ListAgents() []string
-	LoadAgent(string) (agent.Agent, error)
+	// LoadAgent returns an agent by its name. Returns error if there is no agent with such a name.
+	LoadAgent(name string) (agent.Agent, error)
+	// RootAgent returns the root agent
+	RootAgent() agent.Agent
 }
 
-// SingleAgentLoader should be used when you have only one agent
-type SingleAgentLoader struct {
-	main agent.Agent
+// multiAgentLoader should be used when you have multiple agents
+type multiAgentLoader struct {
+	agentMap map[string]agent.Agent
+	root     agent.Agent
 }
 
-func NewSingleAgentLoader(a agent.Agent) *SingleAgentLoader {
-	return &SingleAgentLoader{main: a}
+// singleAgentLoader should be used when you have only one agent
+type singleAgentLoader struct {
+	root agent.Agent
 }
 
-func (s *SingleAgentLoader) Root() agent.Agent {
-	return s.main
+// NewSingleAgentLoader returns a loader with only one agent, which becomes the root agent
+func NewSingleAgentLoader(a agent.Agent) AgentLoader {
+	return &singleAgentLoader{root: a}
 }
 
-func (s *SingleAgentLoader) ListAgents() []string {
-	return []string{s.main.Name()}
+// singleAgentLoader implements AgentLoader. Returns root agent's name
+func (s *singleAgentLoader) ListAgents() []string {
+	return []string{s.root.Name()}
 }
 
-func (s *SingleAgentLoader) LoadAgent(name string) (agent.Agent, error) {
+// singleAgentLoader implements AgentLoader. Returns root for empty name and for root.Name(), error otherwise.
+func (s *singleAgentLoader) LoadAgent(name string) (agent.Agent, error) {
 	if name == "" {
-		return s.main, nil
+		return s.root, nil
 	}
-	if name == s.main.Name() {
-		return s.main, nil
+	if name == s.root.Name() {
+		return s.root, nil
 	}
-	return nil, fmt.Errorf("cannot load agent '%s' - provide empty string or use '%s'", name, s.main.Name())
+	return nil, fmt.Errorf("cannot load agent '%s' - provide an empty string or use '%s'", name, s.root.Name())
 }
 
-// MultiAgentLoader should be used when you have more than one agent
-type MultiAgentLoader struct {
-	root   agent.Agent
-	agents map[string]agent.Agent
-}
-
-func NewStaticAgentLoader(root agent.Agent, agents map[string]agent.Agent) *MultiAgentLoader {
-	return &MultiAgentLoader{
-		root:   root,
-		agents: agents,
-	}
-}
-
-func (s *MultiAgentLoader) Root() agent.Agent {
+// singleAgentLoader implements AgentLoader. Returns the root agent.
+func (s *singleAgentLoader) RootAgent() agent.Agent {
 	return s.root
 }
 
-func (s *MultiAgentLoader) ListAgents() []string {
-	agents := make([]string, 0, len(s.agents))
-	for name := range s.agents {
+// NewMultiAgentLoader returns a new AgentLoader with the given root Agent and other agents.
+// Returns an error if more than one agent (including root) shares the same name
+func NewMultiAgentLoader(root agent.Agent, agents ...agent.Agent) (AgentLoader, error) {
+	m := make(map[string]agent.Agent)
+	m[root.Name()] = root
+	for _, a := range agents {
+		if _, ok := m[a.Name()]; ok {
+			// duplicate name
+			return nil, fmt.Errorf("duplicate agent name: %s", a.Name())
+		}
+		m[a.Name()] = a
+	}
+	return &multiAgentLoader{
+		agentMap: m,
+		root:     root,
+	}, nil
+}
+
+// multiAgentLoader implements AgentLoader. Returns the list of all agents' names (including root agent)
+func (m *multiAgentLoader) ListAgents() []string {
+	agents := make([]string, 0, len(m.agentMap))
+	for name := range m.agentMap {
 		agents = append(agents, name)
 	}
 	return agents
 }
 
-func (s *MultiAgentLoader) LoadAgent(name string) (agent.Agent, error) {
-	agent, ok := s.agents[name]
+// multiAgentLoader implements LoadAgent. Returns an agent with given name or error if no such an agent is found
+func (m *multiAgentLoader) LoadAgent(name string) (agent.Agent, error) {
+	agent, ok := m.agentMap[name]
 	if !ok {
-		return nil, fmt.Errorf("agent %s not found", name)
+		return nil, fmt.Errorf("agent %s not found. Please specify one of those: %v", name, m.ListAgents())
 	}
 	return agent, nil
+}
+
+// multiAgentLoader implements LoadAgent.
+func (m *multiAgentLoader) RootAgent() agent.Agent {
+	return m.root
 }
