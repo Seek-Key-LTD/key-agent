@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// package a2a allows to run A2A
+// Package a2a allows to run A2A
 package a2a
 
 import (
@@ -46,7 +46,7 @@ type a2aLauncher struct {
 }
 
 // NewLauncher creates new a2a launcher. It extends Web launcher
-func NewLauncher() web.WebSublauncher {
+func NewLauncher() web.Sublauncher {
 	config := &a2aConfig{}
 
 	fs := flag.NewFlagSet("a2a", flag.ContinueOnError)
@@ -118,8 +118,8 @@ func (a *a2aLauncher) SimpleDescription() string {
 }
 
 // UserMessage implements web.WebSublauncher.
-func (a *a2aLauncher) UserMessage(webUrl string, printer func(v ...any)) {
-	printer(fmt.Sprintf("       a2a:  you can access A2A using grpc protocol: %s", webUrl))
+func (a *a2aLauncher) UserMessage(webURL string, printer func(v ...any)) {
+	printer(fmt.Sprintf("       a2a:  you can access A2A using grpc protocol: %s", webURL))
 }
 
 // newA2AHandler creates a new A2A handler from the provided ADK configuration.
