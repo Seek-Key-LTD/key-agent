@@ -72,9 +72,7 @@ type Sublauncher interface {
 	SimpleDescription() string
 
 	// SetupSubrouters adds sublauncher-specific routes to the router.
-	SetupSubrouters(router *mux.Router, adkConfig *adk.Config)
-	// WrapHandlers allows a sublauncher to wrap the main HTTP handler, for example to add middleware.
-	WrapHandlers(handler http.Handler, adkConfig *adk.Config) http.Handler
+	SetupSubrouters(router *mux.Router, adkConfig *adk.Config) error
 	// UserMessage is a hook for sublaunchers to print a message to the user when the web server starts.
 	UserMessage(webURL string, printer func(v ...any))
 }
@@ -161,13 +159,9 @@ func (w *Launcher) Run(ctx context.Context, config *adk.Config) error {
 
 	// Setup subrouters
 	for _, l := range w.activeSublaunchers {
-		l.SetupSubrouters(router, config)
-	}
-
-	// allow sublaunchers to modify top level handler (needed by a2a)
-	var handler http.Handler = router
-	for _, l := range w.activeSublaunchers {
-		handler = l.WrapHandlers(handler, config)
+		if err := l.SetupSubrouters(router, config); err != nil {
+			return fmt.Errorf("%s subrouter setup failed: %v", l.Keyword(), err)
+		}
 	}
 
 	log.Printf("Starting the web server: %+v", w.config)
@@ -184,7 +178,7 @@ func (w *Launcher) Run(ctx context.Context, config *adk.Config) error {
 		WriteTimeout: time.Second * 15,
 		ReadTimeout:  time.Second * 15,
 		IdleTimeout:  time.Second * 60,
-		Handler:      handler,
+		Handler:      router,
 	}
 
 	err := srv.ListenAndServe()

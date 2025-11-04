@@ -63,17 +63,11 @@ func (w *webUILauncher) Parse(args []string) ([]string, error) {
 	return restArgs, nil
 }
 
-// WrapHandlers implements the web.WebSublauncher interface. It does not change
-// the top-level routes for the WebUI.
-func (a *webUILauncher) WrapHandlers(handler http.Handler, adkConfig *adk.Config) http.Handler {
-	// webui doesn't change the top level routes
-	return handler
-}
-
 // SetupSubrouters implements the web.WebSublauncher interface. It adds the
 // WebUI subrouter to the main router.
-func (w *webUILauncher) SetupSubrouters(router *mux.Router, adkConfig *adk.Config) {
+func (w *webUILauncher) SetupSubrouters(router *mux.Router, adkConfig *adk.Config) error {
 	w.AddSubrouter(router, w.config.pathPrefix, adkConfig, w.config.backendAddress)
+	return nil
 }
 
 // SimpleDescription returns a simple description of the WebUI launcher.

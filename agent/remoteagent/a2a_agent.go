@@ -133,8 +133,7 @@ func resolveAgentCard(ctx agent.InvocationContext, cfg A2AConfig) (*a2a.AgentCar
 	}
 
 	if strings.HasPrefix(cfg.AgentCardSource, "http://") || strings.HasPrefix(cfg.AgentCardSource, "https://") {
-		resolver := agentcard.Resolver{BaseURL: cfg.AgentCardSource}
-		card, err := resolver.Resolve(ctx, cfg.CardResolveOptions...)
+		card, err := agentcard.DefaultResolver.Resolve(ctx, cfg.AgentCardSource, cfg.CardResolveOptions...)
 		if err != nil {
 			return nil, fmt.Errorf("failed to fetch an agent card: %w", err)
 		}
