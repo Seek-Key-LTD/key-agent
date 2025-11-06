@@ -76,6 +76,7 @@ func ToSessionEvent(ctx agent.InvocationContext, event a2a.Event) (*session.Even
 		}
 		event.LongRunningToolIDs = getLongRunningToolIDs(v.Artifact.Parts, event.Content.Parts)
 		event.CustomMetadata = ToCustomMetadata(v.TaskID, v.ContextID)
+		event.Partial = true
 		return event, nil
 
 	case *a2a.TaskStatusUpdateEvent:
@@ -96,6 +97,7 @@ func ToSessionEvent(ctx agent.InvocationContext, event a2a.Event) (*session.Even
 		for _, part := range event.Content.Parts {
 			part.Thought = true
 		}
+		event.Partial = true
 		return event, nil
 
 	default:
@@ -206,6 +208,9 @@ func taskToEvent(ctx agent.InvocationContext, task *a2a.Task) (*session.Event, e
 	event.CustomMetadata = ToCustomMetadata(task.ID, task.ContextID)
 	if task.Status.State == a2a.TaskStateInputRequired {
 		event.LongRunningToolIDs = longRunningToolIDs
+	}
+	if !task.Status.State.Terminal() && task.Status.State != a2a.TaskStateInputRequired {
+		event.Partial = true
 	}
 	return event, nil
 }

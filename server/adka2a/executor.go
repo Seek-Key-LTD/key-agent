@@ -29,16 +29,16 @@ import (
 
 // ExecutorConfig represents mandatory Executor dependencies.
 type ExecutorConfig struct {
-	// RunnerConfig is the configuration which will be used for runner.New during A2A Execute invocation.
+	// RunnerConfig is the configuration which will be used for [runner.New] during A2A Execute invocation.
 	RunnerConfig runner.Config
-	// RunConfig is the configuration which will be passed to runner.Runner.Run during A2A Execute invocation.
+	// RunConfig is the configuration which will be passed to [runner.Runner.Run] during A2A Execute invocation.
 	RunConfig agent.RunConfig
 }
 
 var _ a2asrv.AgentExecutor = (*Executor)(nil)
 
-// Executor invokes an ADK agent and translates session.Events to a2a.Events according to the following rules:
-//   - If the input doesn't reference any Task, produce a TaskStatusUpdateEvent with TaskStateSubmitted.
+// Executor invokes an ADK agent and translates [session.Event]-s to [a2a.Event]-s according to the following rules:
+//   - If the input doesn't reference any a2a.Task, produce a TaskStatusUpdateEvent with TaskStateSubmitted.
 //   - Right before runner.Runner invocation, produce TaskStatusUpdateEvent with TaskStateWorking.
 //   - For every session.Event produce a TaskArtifactUpdateEvent{Append=true} with transformed parts.
 //   - After the last session.Event is processed produce an empty TaskArtifactUpdateEvent{Append=true} with LastChunk=true,
@@ -50,7 +50,7 @@ type Executor struct {
 	config ExecutorConfig
 }
 
-// NewExecutor creates an initialized Executor instance.
+// NewExecutor creates an initialized [Executor] instance.
 func NewExecutor(config ExecutorConfig) *Executor {
 	return &Executor{config: config}
 }
