@@ -57,9 +57,7 @@ func ContentsRequestProcessor(ctx agent.InvocationContext, req *model.LLMRequest
 
 // buildContentsDefault returns the contents for the LLM request by applying
 // filtering, rearrangement, and content processing to the given events.
-func buildContentsDefault(agentName, branch string, events []*session.Event) ([]*genai.Content, error) {
-	branchPrefix := branch + "."
-
+func buildContentsDefault(agentName, invocationBranch string, events []*session.Event) ([]*genai.Content, error) {
 	// parse the events, leaving the contents and the function calls and responses from the current agent.
 	var filtered []*session.Event
 	for _, ev := range events {
@@ -75,7 +73,7 @@ func buildContentsDefault(agentName, branch string, events []*session.Event) ([]
 		}
 		// Skip events that do not belong to the current branch.
 		// TODO: can we use a richier type for branch (e.g. []string) instead of using string prefix test?
-		if branch != "" && (ev.Branch != branch && !strings.HasPrefix(ev.Branch, branchPrefix)) {
+		if !eventBelongsToBranch(invocationBranch, ev) {
 			continue
 		}
 		if isAuthEvent(ev) {
@@ -110,6 +108,19 @@ func buildContentsDefault(agentName, branch string, events []*session.Event) ([]
 		contents = append(contents, content)
 	}
 	return contents, nil
+}
+
+func eventBelongsToBranch(invocationBranch string, event *session.Event) bool {
+	if invocationBranch == "" {
+		return true
+	}
+	if event.Branch == invocationBranch {
+		return true
+	}
+	// We use dot to delimit branch nodes. To avoid simple prefix match
+	// (e.g. agent_0 unexpectedly matching agent_00), require either perfect branch
+	// match, or match prefix with an additional explicit '.'
+	return strings.HasPrefix(invocationBranch, event.Branch+".")
 }
 
 // rearrangeEventsForLatestFunctionResponse
