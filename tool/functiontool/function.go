@@ -46,7 +46,7 @@ type Config struct {
 
 // Func represents a Go function that can be wrapped in a tool.
 // It takes a tool.Context and a generic argument type, and returns a generic result type.
-type Func[TArgs, TResults any] func(tool.Context, TArgs) TResults
+type Func[TArgs, TResults any] func(tool.Context, TArgs) (TResults, error)
 
 // New creates a new tool with a name, description, and the provided handler.
 // Input schema is automatically inferred from the input and output types.
@@ -140,7 +140,10 @@ func (f *functionTool[TArgs, TResults]) Run(ctx tool.Context, args any) (map[str
 	if err != nil {
 		return nil, err
 	}
-	output := f.handler(ctx, input)
+	output, err := f.handler(ctx, input)
+	if err != nil {
+		return nil, err
+	}
 	resp, err := typeutil.ConvertToWithJSONSchema[TResults, map[string]any](output, f.outputSchema)
 	if err == nil { // all good
 		return resp, nil

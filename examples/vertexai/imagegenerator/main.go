@@ -90,16 +90,14 @@ func main() {
 }
 
 // This is a function tool to generate images using Vertex AI's Imagen model.
-func generateImage(ctx tool.Context, input generateImageInput) generateImageResult {
+func generateImage(ctx tool.Context, input generateImageInput) (generateImageResult, error) {
 	client, err := genai.NewClient(ctx, &genai.ClientConfig{
 		Project:  os.Getenv("GOOGLE_CLOUD_PROJECT"),
 		Location: os.Getenv("GOOGLE_CLOUD_LOCATION"),
 		Backend:  genai.BackendVertexAI,
 	})
 	if err != nil {
-		return generateImageResult{
-			Status: "fail",
-		}
+		return generateImageResult{}, err
 	}
 
 	response, err := client.Models.GenerateImages(
@@ -108,21 +106,14 @@ func generateImage(ctx tool.Context, input generateImageInput) generateImageResu
 		input.Prompt,
 		&genai.GenerateImagesConfig{NumberOfImages: 1})
 	if err != nil {
-		return generateImageResult{
-			Status: "fail",
-		}
+		return generateImageResult{}, err
 	}
 
 	_, err = ctx.Artifacts().Save(ctx, input.Filename, genai.NewPartFromBytes(response.GeneratedImages[0].Image.ImageBytes, "image/png"))
 	if err != nil {
-		return generateImageResult{
-			Status: "fail",
-		}
+		return generateImageResult{}, err
 	}
-	return generateImageResult{
-		Status:   "success",
-		Filename: input.Filename,
-	}
+	return generateImageResult{Filename: input.Filename, Status: "success"}, nil
 }
 
 type generateImageInput struct {
@@ -137,17 +128,17 @@ type generateImageResult struct {
 
 // This is function tool that loads image from the artifacts service and
 // saves is to the local filesystem.
-func saveImage(ctx tool.Context, input saveImageInput) saveImageResult {
+func saveImage(ctx tool.Context, input saveImageInput) (saveImageResult, error) {
 	filename := input.Filename
 	resp, err := ctx.Artifacts().Load(ctx, filename)
 	if err != nil {
 		log.Printf("Failed to load artifact '%s': %v", filename, err)
-		return saveImageResult{Status: "fail"}
+		return saveImageResult{}, err
 	}
 
 	if resp.Part.InlineData == nil || len(resp.Part.InlineData.Data) == 0 {
 		log.Printf("Artifact '%s' has no inline data", filename)
-		return saveImageResult{Status: "fail"}
+		return saveImageResult{}, err
 	}
 
 	// Ensure the filename has a .png extension for the local file.
@@ -160,18 +151,18 @@ func saveImage(ctx tool.Context, input saveImageInput) saveImageResult {
 	outputDir := "output"
 	if err := os.MkdirAll(outputDir, 0o755); err != nil {
 		log.Printf("Failed to create output directory '%s': %v", outputDir, err)
-		return saveImageResult{Status: "fail"}
+		return saveImageResult{}, err
 	}
 
 	localPath := filepath.Join(outputDir, localFilename)
 	err = os.WriteFile(localPath, resp.Part.InlineData.Data, 0o644)
 	if err != nil {
 		log.Printf("Failed to write image to local file '%s': %v", localPath, err)
-		return saveImageResult{Status: "fail"}
+		return saveImageResult{}, err
 	}
 
 	log.Printf("Successfully saved image to %s", localPath)
-	return saveImageResult{Status: "success"}
+	return saveImageResult{Status: "success"}, nil
 }
 
 type saveImageInput struct {

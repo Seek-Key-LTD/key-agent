@@ -256,7 +256,7 @@ type WeatherResult struct {
 	Timestamp   time.Time `json:"timestamp"`
 }
 
-func GetWeather(ctx tool.Context, args WeatherArgs) WeatherResult {
+func GetWeather(ctx tool.Context, args WeatherArgs) (WeatherResult, error) {
 	// Simulate weather data
 	temperatures := []int{-10, -5, 0, 5, 10, 15, 20, 25, 30, 35}
 	conditions := []string{"sunny", "cloudy", "rainy", "snowy", "windy"}
@@ -267,7 +267,7 @@ func GetWeather(ctx tool.Context, args WeatherArgs) WeatherResult {
 		Condition:   conditions[rand.Intn(len(conditions))],
 		Humidity:    rand.Intn(61) + 30, // 30-90
 		Timestamp:   time.Now(),
-	}
+	}, nil
 }
 
 type CalculationArgs struct {
@@ -284,7 +284,7 @@ type CalculationResult struct {
 	Timestamp time.Time `json:"timestamp"`
 }
 
-func Calculate(ctx tool.Context, args CalculationArgs) CalculationResult {
+func Calculate(ctx tool.Context, args CalculationArgs) (CalculationResult, error) {
 	operations := map[string]float64{
 		"add":      args.X + args.Y,
 		"subtract": args.X - args.Y,
@@ -306,7 +306,7 @@ func Calculate(ctx tool.Context, args CalculationArgs) CalculationResult {
 			Y:         args.Y,
 			Result:    "Unknown operation",
 			Timestamp: time.Now(),
-		}
+		}, nil
 	}
 
 	return CalculationResult{
@@ -315,7 +315,7 @@ func Calculate(ctx tool.Context, args CalculationArgs) CalculationResult {
 		Y:         args.Y,
 		Result:    result,
 		Timestamp: time.Now(),
-	}
+	}, nil
 }
 
 type LogActivityParams struct {
@@ -334,7 +334,7 @@ type LogActivityResult struct {
 	err          error
 }
 
-func LogActivity(ctx tool.Context, params LogActivityParams) LogActivityResult {
+func LogActivity(ctx tool.Context, params LogActivityParams) (LogActivityResult, error) {
 	var activityLog []LogEntry
 	val, err := ctx.State().Get("activity_log")
 	if err == nil {
@@ -346,7 +346,7 @@ func LogActivity(ctx tool.Context, params LogActivityParams) LogActivityResult {
 	if err := ctx.State().Set("activity_log", activityLog); err != nil {
 		return LogActivityResult{
 			err: err,
-		}
+		}, err
 	}
 
 	return LogActivityResult{
@@ -354,7 +354,7 @@ func LogActivity(ctx tool.Context, params LogActivityParams) LogActivityResult {
 		Entry:        logEntry,
 		TotalEntries: len(activityLog),
 		err:          nil,
-	}
+	}, nil
 }
 
 // --- Before Tool Callbacks ---

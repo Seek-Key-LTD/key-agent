@@ -38,8 +38,8 @@ func TestNewLongRunningFunctionTool(t *testing.T) {
 		Result string `json:"result"` // the operation result
 	}
 
-	handler := func(ctx tool.Context, input SumArgs) SumResult {
-		return SumResult{Result: "Processing sum"}
+	handler := func(ctx tool.Context, input SumArgs) (SumResult, error) {
+		return SumResult{Result: "Processing sum"}, nil
 	}
 	sumTool, err := functiontool.New(functiontool.Config{
 		Name:          "sum",
@@ -80,24 +80,24 @@ type IncArgs struct {
 
 func TestLongRunningFunctionFlow(t *testing.T) {
 	functionCalled := 0
-	increaseByOne := func(ctx tool.Context, x IncArgs) map[string]string {
+	increaseByOne := func(ctx tool.Context, x IncArgs) (map[string]string, error) {
 		functionCalled++
-		return map[string]string{"status": "pending"}
+		return map[string]string{"status": "pending"}, nil
 	}
 	testLongRunningFunctionFlow(t, increaseByOne, "status", &functionCalled)
 }
 
 func TestLongRunningStringFunctionFlow(t *testing.T) {
 	functionCalled := 0
-	increaseByOne := func(ctx tool.Context, x IncArgs) string {
+	increaseByOne := func(ctx tool.Context, x IncArgs) (string, error) {
 		functionCalled++
-		return "pending"
+		return "pending", nil
 	}
 	testLongRunningFunctionFlow(t, increaseByOne, "result", &functionCalled)
 }
 
 // --- Test Suite ---
-func testLongRunningFunctionFlow[Out any](t *testing.T, increaseByOne func(ctx tool.Context, x IncArgs) Out, resultKey string, callCount *int) {
+func testLongRunningFunctionFlow[Out any](t *testing.T, increaseByOne func(ctx tool.Context, x IncArgs) (Out, error), resultKey string, callCount *int) {
 	// 1. Setup
 	responses := []*genai.Content{
 		genai.NewContentFromFunctionCall("increaseByOne", map[string]any{}, "model"),
@@ -267,9 +267,9 @@ func TestLongRunningToolIDsAreSet(t *testing.T) {
 	type IncArgs struct {
 	}
 
-	increaseByOne := func(ctx tool.Context, x IncArgs) map[string]string {
+	increaseByOne := func(ctx tool.Context, x IncArgs) (map[string]string, error) {
 		functionCalled++
-		return map[string]string{"status": "pending"}
+		return map[string]string{"status": "pending"}, nil
 	}
 
 	longRunningTool, err := functiontool.New(functiontool.Config{

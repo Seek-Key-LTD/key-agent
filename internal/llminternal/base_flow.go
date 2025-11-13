@@ -416,10 +416,6 @@ func (f *Flow) callTool(tool toolinternal.FunctionTool, fArgs map[string]any, to
 	}
 	if result == nil {
 		result, err = tool.Run(toolCtx, fArgs)
-		// genai.FunctionResponse expects to use "output" key to specify function output
-		// and "error" key to specify error details (if any). If "output" and "error" keys
-		// are not specified, then whole "response" is treated as function output.
-		// TODO(hakim): revisit the tool's function signature to handle error from user function better.
 		if err != nil {
 			return map[string]any{"error": fmt.Errorf("tool %q failed: %w", tool.Name(), err)}
 		}
