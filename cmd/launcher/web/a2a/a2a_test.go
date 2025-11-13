@@ -27,7 +27,6 @@ import (
 	"google.golang.org/adk/agent"
 	"google.golang.org/adk/cmd/launcher"
 	"google.golang.org/adk/cmd/launcher/web"
-	"google.golang.org/adk/server/restapi/services"
 	"google.golang.org/adk/session"
 	"google.golang.org/genai"
 )
@@ -82,7 +81,7 @@ func TestWebLauncher_ServesA2A(t *testing.T) {
 		t.Fatalf("agent.New() error = %v", err)
 	}
 	config := &launcher.Config{
-		AgentLoader:    services.NewSingleAgentLoader(agnt),
+		AgentLoader:    agent.NewSingleLoader(agnt),
 		SessionService: session.InMemoryService(),
 	}
 

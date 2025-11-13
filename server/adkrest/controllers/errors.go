@@ -12,23 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package errors
+package controllers
 
-type StatusError struct {
+type statusError struct {
 	Err  error
 	Code int
 }
 
-func NewStatusError(err error, code int) StatusError {
-	return StatusError{Err: err, Code: code}
+func newStatusError(err error, code int) statusError {
+	return statusError{Err: err, Code: code}
 }
 
 // Error returns an associated error
-func (se StatusError) Error() string {
+func (se statusError) Error() string {
 	return se.Err.Error()
 }
 
 // Status returns an associated status code
-func (se StatusError) Status() int {
+func (se statusError) Status() int {
 	return se.Code
 }

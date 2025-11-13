@@ -12,8 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package web prepares router dedicated to ADK REST API for http web server
-package web
+package adkrest
 
 import (
 	"net/http"
@@ -21,9 +20,9 @@ import (
 	"github.com/gorilla/mux"
 	"google.golang.org/adk/cmd/launcher"
 	"google.golang.org/adk/internal/telemetry"
-	"google.golang.org/adk/server/restapi/handlers"
-	"google.golang.org/adk/server/restapi/routers"
-	"google.golang.org/adk/server/restapi/services"
+	"google.golang.org/adk/server/adkrest/controllers"
+	"google.golang.org/adk/server/adkrest/internal/routers"
+	"google.golang.org/adk/server/adkrest/internal/services"
 
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 )
@@ -34,12 +33,14 @@ func NewHandler(config *launcher.Config) http.Handler {
 	telemetry.AddSpanProcessor(sdktrace.NewSimpleSpanProcessor(adkExporter))
 
 	router := mux.NewRouter().StrictSlash(true)
+	// TODO: Allow taking a prefix to allow customizing the path
+	// where the ADK REST API will be served.
 	setupRouter(router,
-		routers.NewSessionsAPIRouter(handlers.NewSessionsAPIController(config.SessionService)),
-		routers.NewRuntimeAPIRouter(handlers.NewRuntimeAPIRouter(config.SessionService, config.AgentLoader, config.ArtifactService)),
-		routers.NewAppsAPIRouter(handlers.NewAppsAPIController(config.AgentLoader)),
-		routers.NewDebugAPIRouter(handlers.NewDebugAPIController(config.SessionService, config.AgentLoader, adkExporter)),
-		routers.NewArtifactsAPIRouter(handlers.NewArtifactsAPIController(config.ArtifactService)),
+		routers.NewSessionsAPIRouter(controllers.NewSessionsAPIController(config.SessionService)),
+		routers.NewRuntimeAPIRouter(controllers.NewRuntimeAPIRouter(config.SessionService, config.AgentLoader, config.ArtifactService)),
+		routers.NewAppsAPIRouter(controllers.NewAppsAPIController(config.AgentLoader)),
+		routers.NewDebugAPIRouter(controllers.NewDebugAPIController(config.SessionService, config.AgentLoader, adkExporter)),
+		routers.NewArtifactsAPIRouter(controllers.NewArtifactsAPIController(config.ArtifactService)),
 		&routers.EvalAPIRouter{},
 	)
 	return router

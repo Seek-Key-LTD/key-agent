@@ -19,9 +19,9 @@ import (
 	"context"
 
 	"github.com/a2aproject/a2a-go/a2asrv"
+	"google.golang.org/adk/agent"
 	"google.golang.org/adk/artifact"
 	"google.golang.org/adk/memory"
-	"google.golang.org/adk/server/restapi/services"
 	"google.golang.org/adk/session"
 )
 
@@ -56,6 +56,6 @@ type Config struct {
 	SessionService  session.Service
 	ArtifactService artifact.Service
 	MemoryService   memory.Service
-	AgentLoader     services.AgentLoader
+	AgentLoader     agent.Loader
 	A2AOptions      []a2asrv.RequestHandlerOption
 }

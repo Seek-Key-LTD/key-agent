@@ -12,4 +12,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package handlers
+package controllers
+
+import (
+	"net/http"
+
+	"google.golang.org/adk/agent"
+)
+
+// AppsAPIController is the controller for the Apps API.
+type AppsAPIController struct {
+	agentLoader agent.Loader
+}
+
+func NewAppsAPIController(agentLoader agent.Loader) *AppsAPIController {
+	return &AppsAPIController{agentLoader: agentLoader}
+}
+
+// ListAppsHandler handles listing all loaded agents.
+func (c *AppsAPIController) ListAppsHandler(rw http.ResponseWriter, req *http.Request) {
+	apps := c.agentLoader.ListAgents()
+	EncodeJSONResponse(apps, http.StatusOK, rw)
+}

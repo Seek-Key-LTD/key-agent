@@ -23,12 +23,12 @@ import (
 	"os"
 	"path/filepath"
 
+	"google.golang.org/adk/agent"
 	"google.golang.org/adk/agent/llmagent"
 	"google.golang.org/adk/artifact"
 	"google.golang.org/adk/cmd/launcher"
 	"google.golang.org/adk/cmd/launcher/full"
 	"google.golang.org/adk/model/gemini"
-	"google.golang.org/adk/server/restapi/services"
 	"google.golang.org/adk/tool"
 	"google.golang.org/adk/tool/functiontool"
 	"google.golang.org/adk/tool/loadartifactstool"
@@ -63,7 +63,7 @@ func main() {
 		log.Fatalf("Failed to create generate image tool: %v", err)
 	}
 
-	agent, err := llmagent.New(llmagent.Config{
+	a, err := llmagent.New(llmagent.Config{
 		Name:        "image_generator",
 		Model:       model,
 		Description: "Agent to generate pictures, answers questions about it and saves it locally if asked.",
@@ -80,7 +80,7 @@ func main() {
 
 	config := &launcher.Config{
 		ArtifactService: artifact.InMemoryService(),
-		AgentLoader:     services.NewSingleAgentLoader(agent),
+		AgentLoader:     agent.NewSingleLoader(a),
 	}
 
 	l := full.NewLauncher()

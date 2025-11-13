@@ -25,7 +25,6 @@ import (
 	"google.golang.org/adk/cmd/launcher"
 	"google.golang.org/adk/cmd/launcher/full"
 	"google.golang.org/adk/model/gemini"
-	"google.golang.org/adk/server/restapi/services"
 	"google.golang.org/genai"
 )
 
@@ -140,7 +139,7 @@ Do not add any other text before or after the code block.`,
 	log.Printf("Successfully created root agent: %s", rootAgent.Name())
 
 	config := &launcher.Config{
-		AgentLoader: services.NewSingleAgentLoader(rootAgent),
+		AgentLoader: agent.NewSingleLoader(rootAgent),
 	}
 	l := full.NewLauncher()
 	if err = l.Execute(ctx, config, os.Args[1:]); err != nil {

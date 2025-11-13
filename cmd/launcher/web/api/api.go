@@ -24,7 +24,7 @@ import (
 	"google.golang.org/adk/cmd/launcher"
 	weblauncher "google.golang.org/adk/cmd/launcher/web"
 	"google.golang.org/adk/internal/cli/util"
-	restapiweb "google.golang.org/adk/server/restapi/web"
+	"google.golang.org/adk/server/adkrest"
 )
 
 // apiConfig contains parametres for lauching ADK REST API
@@ -68,7 +68,7 @@ func (a *apiLauncher) UserMessage(webURL string, printer func(v ...any)) {
 // SetupSubrouters adds the API router to the parent router.
 func (a *apiLauncher) SetupSubrouters(router *mux.Router, config *launcher.Config) error {
 	// Create the ADK REST API handler
-	apiHandler := restapiweb.NewHandler(config)
+	apiHandler := adkrest.NewHandler(config)
 
 	// Wrap it with CORS middleware
 	corsHandler := corsWithArgs(a.config.frontendAddress)(apiHandler)

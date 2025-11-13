@@ -24,11 +24,11 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"golang.org/x/oauth2"
+	"google.golang.org/adk/agent"
 	"google.golang.org/adk/agent/llmagent"
 	"google.golang.org/adk/cmd/launcher"
 	"google.golang.org/adk/cmd/launcher/full"
 	"google.golang.org/adk/model/gemini"
-	"google.golang.org/adk/server/restapi/services"
 	"google.golang.org/adk/tool"
 	"google.golang.org/adk/tool/mcptoolset"
 	"google.golang.org/genai"
@@ -110,7 +110,7 @@ func main() {
 	}
 
 	// Create LLMAgent with MCP tool set
-	agent, err := llmagent.New(llmagent.Config{
+	a, err := llmagent.New(llmagent.Config{
 		Name:        "helper_agent",
 		Model:       model,
 		Description: "Helper agent.",
@@ -124,7 +124,7 @@ func main() {
 	}
 
 	config := &launcher.Config{
-		AgentLoader: services.NewSingleAgentLoader(agent),
+		AgentLoader: agent.NewSingleLoader(a),
 	}
 	l := full.NewLauncher()
 	if err = l.Execute(ctx, config, os.Args[1:]); err != nil {

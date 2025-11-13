@@ -32,7 +32,6 @@ import (
 	"google.golang.org/adk/model/gemini"
 	"google.golang.org/adk/runner"
 	"google.golang.org/adk/server/adka2a"
-	"google.golang.org/adk/server/restapi/services"
 	"google.golang.org/adk/session"
 	"google.golang.org/adk/tool"
 	"google.golang.org/adk/tool/geminitool"
@@ -120,7 +119,7 @@ func main() {
 	}
 
 	config := &launcher.Config{
-		AgentLoader: services.NewSingleAgentLoader(remoteAgent),
+		AgentLoader: agent.NewSingleLoader(remoteAgent),
 	}
 
 	l := full.NewLauncher()

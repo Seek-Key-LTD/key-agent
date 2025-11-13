@@ -26,7 +26,6 @@ import (
 	"google.golang.org/adk/cmd/launcher"
 	"google.golang.org/adk/cmd/launcher/full"
 	"google.golang.org/adk/model"
-	"google.golang.org/adk/server/restapi/services"
 	"google.golang.org/adk/session"
 	"google.golang.org/genai"
 )
@@ -84,7 +83,7 @@ func main() {
 	}
 
 	config := &launcher.Config{
-		AgentLoader: services.NewSingleAgentLoader(sequentialAgent),
+		AgentLoader: agent.NewSingleLoader(sequentialAgent),
 	}
 
 	l := full.NewLauncher()

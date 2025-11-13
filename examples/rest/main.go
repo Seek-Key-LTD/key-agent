@@ -22,11 +22,11 @@ import (
 	"net/http"
 	"os"
 
+	"google.golang.org/adk/agent"
 	"google.golang.org/adk/agent/llmagent"
 	"google.golang.org/adk/cmd/launcher"
 	"google.golang.org/adk/model/gemini"
-	"google.golang.org/adk/server/restapi/services"
-	"google.golang.org/adk/server/restapi/web"
+	"google.golang.org/adk/server/adkrest"
 	"google.golang.org/adk/session"
 	"google.golang.org/adk/tool"
 	"google.golang.org/adk/tool/geminitool"
@@ -45,7 +45,7 @@ func main() {
 	}
 
 	// Create an agent
-	agent, err := llmagent.New(llmagent.Config{
+	a, err := llmagent.New(llmagent.Config{
 		Name:        "weather_time_agent",
 		Model:       model,
 		Description: "Agent to answer questions about the time and weather in a city.",
@@ -60,12 +60,12 @@ func main() {
 
 	// Configure the ADK REST API
 	config := &launcher.Config{
-		AgentLoader:    services.NewSingleAgentLoader(agent),
+		AgentLoader:    agent.NewSingleLoader(a),
 		SessionService: session.InMemoryService(),
 	}
 
 	// Create the REST API handler - this returns a standard http.Handler
-	apiHandler := web.NewHandler(config)
+	apiHandler := adkrest.NewHandler(config)
 
 	// Create a standard net/http ServeMux
 	mux := http.NewServeMux()
