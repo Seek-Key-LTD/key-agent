@@ -48,11 +48,12 @@ func saveReportfunc(ctx agent.CallbackContext, llmResponse *model.LLMResponse, l
 	return llmResponse, llmResponseError
 }
 
-// needed to use 'user' for both a2a and webui (which are sharing the same sessions service)
+// AuthInterceptor sets 'user' name needed for both a2a and webui launchers which sharing the same sessions service.
 type AuthInterceptor struct {
 	a2asrv.PassthroughCallInterceptor
 }
 
+// Before implements a before request callback.
 func (a *AuthInterceptor) Before(ctx context.Context, callCtx *a2asrv.CallContext, req *a2asrv.Request) (context.Context, error) {
 	callCtx.User = &a2asrv.AuthenticatedUser{
 		UserName: "user",
@@ -84,7 +85,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to create agent: %v", err)
 	}
-	llmAuditor := agents.GetLLmAuditorAgent(ctx, model)
+	llmAuditor := agents.GetLLMAuditorAgent(ctx, model)
 	imageGeneratorAgent := agents.GetImageGeneratorAgent(ctx, model)
 
 	agentLoader, err := agent.NewMultiLoader(
