@@ -99,6 +99,13 @@ func (e *Executor) Execute(ctx context.Context, reqCtx *a2asrv.RequestContext, q
 		}
 	}
 
+	if event, err := handleInputRequired(reqCtx, content); event != nil || err != nil {
+		if err != nil {
+			return err
+		}
+		return queue.Write(ctx, event)
+	}
+
 	if reqCtx.StoredTask == nil {
 		event := a2a.NewSubmittedTask(reqCtx, msg)
 		if err := queue.Write(ctx, event); err != nil {

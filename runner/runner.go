@@ -34,6 +34,7 @@ import (
 	imemory "google.golang.org/adk/internal/memory"
 	"google.golang.org/adk/internal/plugininternal"
 	"google.golang.org/adk/internal/sessioninternal"
+	"google.golang.org/adk/internal/utils"
 	"google.golang.org/adk/memory"
 	"google.golang.org/adk/model"
 	"google.golang.org/adk/plugin"
@@ -128,7 +129,7 @@ func (r *Runner) Run(ctx context.Context, userID, sessionID string, msg *genai.C
 
 		storedSession := resp.Session
 
-		agentToRun, err := r.findAgentToRun(storedSession)
+		agentToRun, err := r.findAgentToRun(storedSession, msg)
 		if err != nil {
 			yield(nil, err)
 			return
@@ -287,12 +288,18 @@ func (r *Runner) appendMessageToSession(ctx agent.InvocationContext, storedSessi
 
 // findAgentToRun returns the agent that should handle the next request based on
 // session history.
-func (r *Runner) findAgentToRun(session session.Session) (agent.Agent, error) {
+func (r *Runner) findAgentToRun(session session.Session, msg *genai.Content) (agent.Agent, error) {
+	if event := handleUserFunctionCallResponse(session.Events(), msg); event != nil {
+		subAgent := findAgent(r.rootAgent, event.Author)
+		if subAgent != nil {
+			return subAgent, nil
+		}
+		log.Printf("Function call from an unknown agent: %s, event id: %s", event.Author, event.ID)
+	}
+
 	events := session.Events()
 	for i := events.Len() - 1; i >= 0; i-- {
 		event := events.At(i)
-
-		// TODO: findMatchingFunctionCall.
 
 		if event.Author == "user" {
 			continue
@@ -312,6 +319,33 @@ func (r *Runner) findAgentToRun(session session.Session) (agent.Agent, error) {
 
 	// Falls back to root agent if no suitable agents are found in the session.
 	return r.rootAgent, nil
+}
+
+// handleUserFunctionCallResponse finds the function call event that matches the function response id
+// delivered by the user in the latest event.
+func handleUserFunctionCallResponse(events session.Events, msg *genai.Content) *session.Event {
+	if events.Len() == 0 {
+		return nil
+	}
+
+	functionResponses := utils.FunctionResponses(msg)
+	if len(functionResponses) == 0 {
+		return nil
+	}
+
+	// This assumes that even if user provides multiple function responses, all the function calls
+	// were made by the same agent. Otherwise it would be impossible to rearrange session events
+	// such that every function response has a corresponding call filtering by author.
+	callID := functionResponses[0].ID
+	for i := events.Len() - 1; i >= 0; i-- {
+		event := events.At(i)
+		for _, part := range utils.FunctionCalls(event.Content) {
+			if part.ID == callID {
+				return event
+			}
+		}
+	}
+	return nil
 }
 
 // checks if the agent and its parent chain allow transfer up the tree.
