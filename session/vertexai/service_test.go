@@ -28,7 +28,7 @@ import (
 	"google.golang.org/grpc"
 
 	"google.golang.org/adk/session"
-	"google.golang.org/adk/session/session_test"
+	"google.golang.org/adk/session/sessiontestsuite"
 )
 
 // if you want to test it for yourself, you can regenerate all by running
@@ -40,18 +40,18 @@ import (
 const (
 	ProjectID = "adk-go-e2e"
 	Location  = "us-central1"
-	EngineId  = "1491331942182813696"
-	EngineId2 = "6857370898194759680"
+	EngineID  = "1491331942182813696"
+	EngineID2 = "6857370898194759680"
 	UserID    = "test-user"
 )
 
 func Test_vertexaiService(t *testing.T) {
-	opts := session_test.SuiteOptions{
+	opts := sessiontestsuite.SuiteOptions{
 		SupportsUserProvidedSessionID: true,
 		ProvidesServerAssignedEventID: true,
-		AppName:                       EngineId,
+		AppName:                       EngineID,
 	} // VertexAI forbids custom IDs
-	session_test.RunServiceTests(t, opts, func(t *testing.T) session.Service {
+	sessiontestsuite.RunServiceTests(t, opts, func(t *testing.T) session.Service {
 		name := strings.ReplaceAll(t.Name(), "/", "_")
 		s, _ := emptyService(t, name, false)
 		return s
@@ -68,21 +68,21 @@ func Test_vertexaiService_AppendEvent_StructuralValidation(t *testing.T) {
 	}{
 		{
 			name:    "missing_session_id",
-			session: &localSession{appName: EngineId, userID: UserID},
+			session: &localSession{appName: EngineID, userID: UserID},
 			event:   &session.Event{},
 			wantErr: true,
 			offline: true,
 		},
 		{
 			name:    "nil_event",
-			session: &localSession{appName: EngineId2, userID: "user2", sessionID: "session2"},
+			session: &localSession{appName: EngineID2, userID: "user2", sessionID: "session2"},
 			event:   nil,
 			wantErr: true,
 			offline: true,
 		},
 		{
 			name:    "missing_author",
-			session: &localSession{appName: EngineId2, userID: "user2", sessionID: "session2"},
+			session: &localSession{appName: EngineID2, userID: "user2", sessionID: "session2"},
 			event: &session.Event{
 				Timestamp:    time.Now(),
 				InvocationID: uuid.NewString(),
@@ -91,7 +91,7 @@ func Test_vertexaiService_AppendEvent_StructuralValidation(t *testing.T) {
 		},
 		{
 			name:    "missing_invocation_id",
-			session: &localSession{appName: EngineId2, userID: "user2", sessionID: "session2"},
+			session: &localSession{appName: EngineID2, userID: "user2", sessionID: "session2"},
 			event: &session.Event{
 				Timestamp: time.Now(),
 				Author:    UserID,
@@ -153,8 +153,8 @@ func emptyService(t *testing.T, name string, offline bool) (session.Service, map
 }
 
 func deleteAll(t *testing.T, v session.Service) {
-	deleteAllFromApp(t, v, EngineId)
-	deleteAllFromApp(t, v, EngineId2)
+	deleteAllFromApp(t, v, EngineID)
+	deleteAllFromApp(t, v, EngineID2)
 }
 
 func deleteAllFromApp(t *testing.T, v session.Service, app string) {
