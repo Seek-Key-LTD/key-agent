@@ -3,8 +3,8 @@ package oracle
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
+	"iter"
 	"time"
 
 	"google.golang.org/adk/v2/session"
@@ -22,141 +22,132 @@ func NewOracleSession(dsn string) *OracleSession {
 
 // Create creates a new session in Oracle.
 func (s *OracleSession) Create(ctx context.Context, req *session.CreateRequest) (*session.CreateResponse, error) {
+	_ = ctx
 	sessID := req.SessionID
 	if sessID == "" {
 		sessID = fmt.Sprintf("sess_%d_%s", time.Now().UnixNano(), req.UserID)
 	}
 
-	stateJSON, _ := json.Marshal(req.State)
-
-	// INSERT INTO PICO_SESSION (app_name, user_id, session_id, state_json)
-	// VALUES (:app_name, :user_id, :session_id, :state_json)
-
-	// TODO: actual DB execution
-	// If session already exists, return it (idempotent create)
-
 	return &session.CreateResponse{
-		Session: &localSession{
-			appName:  req.AppName,
-			userID:   req.UserID,
-			sessionID: sessID,
-			state:     req.State,
-		},
+		Session: newLocalSession(req.AppName, req.UserID, sessID, req.State),
 	}, nil
 }
 
 // Get retrieves a session from Oracle.
 func (s *OracleSession) Get(ctx context.Context, req *session.GetRequest) (*session.GetResponse, error) {
-	// SELECT state_json, events_json, updated_at
-	// FROM PICO_SESSION
-	// WHERE app_name = :app_name AND user_id = :user_id AND session_id = :session_id
-
-	// TODO: actual DB execution + optional filters (NumRecentEvents, After)
-
-	return nil, session.ErrSessionNotFound
+	_ = ctx
+	// TODO: SELECT state_json, events_json FROM PICO_SESSION ...
+	return nil, fmt.Errorf("session not found")
 }
 
 // List lists sessions for a given app + user.
 func (s *OracleSession) List(ctx context.Context, req *session.ListRequest) (*session.ListResponse, error) {
-	// SELECT app_name, user_id, session_id, updated_at
-	// FROM PICO_SESSION
-	// WHERE app_name = :app_name AND user_id = :user_id
-	// ORDER BY updated_at DESC
-
-	// TODO: actual DB execution
-
+	_ = ctx
+	// TODO: SELECT app_name, user_id, session_id FROM PICO_SESSION ...
 	return &session.ListResponse{Sessions: []session.Session{}}, nil
 }
 
 // Delete removes a session from Oracle.
 func (s *OracleSession) Delete(ctx context.Context, req *session.DeleteRequest) error {
-	// DELETE FROM PICO_SESSION
-	// WHERE app_name = :app_name AND user_id = :user_id AND session_id = :session_id
-
-	// TODO: actual DB execution
-
+	_ = ctx
+	// TODO: DELETE FROM PICO_SESSION ...
 	return nil
 }
 
 // AppendEvent appends an event to a session and updates its state.
 func (s *OracleSession) AppendEvent(ctx context.Context, sess session.Session, event *session.Event) error {
+	_ = ctx
 	if sess.ID() == "" {
 		return fmt.Errorf("session ID is empty")
 	}
 
-	// Update session state from event state delta
-	newState := mergeState(sess.State(), event.Actions.StateDelta)
+	state := sess.State()
+	for k, v := range event.Actions.StateDelta {
+		if err := state.Set(k, v); err != nil {
+			return fmt.Errorf("set state %q: %w", k, err)
+		}
+	}
 
-	// UPDATE PICO_SESSION
-	// SET state_json = :state_json, events_json = events_json || :event_json, updated_at = CURRENT_TIMESTAMP
-	// WHERE app_name = :app_name AND user_id = :user_id AND session_id = :session_id
-
-	// TODO: actual DB execution
-
+	// TODO: UPDATE PICO_SESSION ...
 	return nil
 }
 
-// localSession implements session.Session interface for Create response.
+// ── local implementations ──
+
 type localSession struct {
 	appName   string
 	userID    string
 	sessionID string
 	state     map[string]any
+	events    []*session.Event
 }
 
-func (l *localSession) ID() string         { return l.sessionID }
-func (l *localSession) AppName() string    { return l.appName }
-func (l *localSession) UserID() string     { return l.userID }
-func (l *localSession) State() session.State {
-	return &memState{state: l.state}
+func newLocalSession(appName, userID, sessionID string, state map[string]any) *localSession {
+	return &localSession{
+		appName:   appName,
+		userID:    userID,
+		sessionID: sessionID,
+		state:     state,
+		events:    make([]*session.Event, 0),
+	}
 }
+
+func (l *localSession) ID() string           { return l.sessionID }
+func (l *localSession) AppName() string      { return l.appName }
+func (l *localSession) UserID() string       { return l.userID }
+func (l *localSession) State() session.State { return memState(l.state) }
 func (l *localSession) Events() session.Events {
-	return &memEvents{}
+	return (*memEvents)(&l.events)
 }
-func (l *localSession) LastUpdateTime() time.Time {
-	return time.Time{}
-}
+func (l *localSession) LastUpdateTime() time.Time { return time.Time{} }
 
 // memState implements session.State.
-type memState struct {
-	state map[string]any
-}
+type memState map[string]any
 
-func (m *memState) Get(key string) (any, error) {
-	if v, ok := m.state[key]; ok {
+func (m memState) Get(key string) (any, error) {
+	if v, ok := m[key]; ok {
 		return v, nil
 	}
-	return nil, session.ErrStateKeyNotExist
+	return nil, fmt.Errorf("state key %q not found", key)
 }
 
-func (m *memState) All() any {
-	// TODO: return iter.Seq2[string, any] when fully implemented
-	return m.state
+func (m memState) All() iter.Seq2[string, any] {
+	return func(yield func(string, any) bool) {
+		for k, v := range m {
+			if !yield(k, v) {
+				return
+			}
+		}
+	}
 }
 
-func (m *memState) Set(key string, value any) error {
-	m.state[key] = value
+func (m memState) Set(key string, value any) error {
+	m[key] = value
 	return nil
 }
 
 // memEvents implements session.Events.
-type memEvents struct{}
+type memEvents []*session.Event
 
-func (e *memEvents) Len() int              { return 0 }
-func (e *memEvents) At(i int) *session.Event { return nil }
-func (e *memEvents) All() any              { return nil } // TODO: iter.Seq[*session.Event]
-
-// mergeState merges event state delta into existing session state.
-func mergeState(existing session.State, delta map[string]any) map[string]any {
-	result := make(map[string]any)
-	// TODO: copy from existing state
-	for k, v := range delta {
-		result[k] = v
+func (e memEvents) All() iter.Seq[*session.Event] {
+	return func(yield func(*session.Event) bool) {
+		for _, ev := range e {
+			if !yield(ev) {
+				return
+			}
+		}
 	}
-	return result
 }
 
-// SQL
+func (e memEvents) Len() int          { return len(e) }
+func (e memEvents) At(i int) *session.Event {
+	if i >= 0 && i < len(e) {
+		return e[i]
+	}
+	return nil
+}
+
+// ── SQL ──
 const createSessionSQL = `
 INSERT INTO PICO_SESSION (APP_NAME, USER_ID, SESSION_ID, STATE_JSON, CREATED_AT, UPDATED_AT)
 VALUES (:app_name, :user_id, :session_id, :state_json, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
