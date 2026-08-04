@@ -28,6 +28,9 @@ func main() {
 	if *baseURL == "" {
 		log.Fatal("-base-url required (or set OPENAI_BASE_URL)")
 	}
+	if *secret == "" {
+		log.Fatal("-secret required (or set LITELLM_API_KEY)")
+	}
 
 	llm, err := openaimodel.NewModel(nil, *modelID, &openaimodel.ClientConfig{
 		BaseURL: *baseURL,
