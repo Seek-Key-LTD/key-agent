@@ -1,55 +1,56 @@
-# Agent Development Kit (ADK) for Go
+# Key Agent
 
-[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
-[![Go Doc](https://img.shields.io/badge/Go%20Package-Doc-blue.svg)](https://pkg.go.dev/google.golang.org/adk/v2)
-[![Nightly Check](https://github.com/google/adk-go/actions/workflows/nightly.yml/badge.svg)](https://github.com/google/adk-go/actions/workflows/nightly.yml)
-[![r/agentdevelopmentkit](https://img.shields.io/badge/Reddit-r%2Fagentdevelopmentkit-FF4500?style=flat&logo=reddit&logoColor=white)](https://www.reddit.com/r/agentdevelopmentkit/)
-[![View Code Wiki](https://www.gstatic.com/_/boq-sdlc-agents-ui/_/r/YUi5dj2UWvE.svg)](https://codewiki.google/github.com/google/adk-go)
+> 基于 Google ADK-Go 的 Go 原生 Agent Runtime — 只做加法，最小核心 + 可替换 adapter。
 
-<html>
-    <h2 align="center">
-      <img src="https://raw.githubusercontent.com/google/adk-python/main/assets/agent-development-kit.png" width="256"/>
-    </h2>
-    <h3 align="center">
-      An open-source, code-first Go toolkit for building, evaluating, and deploying sophisticated AI agents with flexibility and control.
-    </h3>
-    <h3 align="center">
-      Important Links:
-      <a href="https://google.github.io/adk-docs/">Docs</a> &
-      <a href="https://github.com/google/adk-go/tree/main/examples">Samples</a> &
-      <a href="https://github.com/google/adk-python">Python ADK</a> &
-      <a href="https://github.com/google/adk-java">Java ADK</a> &
-      <a href="https://github.com/google/adk-kotlin">Kotlin ADK</a> &
-      <a href="https://github.com/google/adk-js">TypeScript ADK</a> &
-      <a href="https://github.com/google/adk-web">ADK Web</a>.
-    </h3>
-</html>
+这是 Seek-Key 的 agent 运行时，fork 自 [google/adk-go](https://github.com/google/adk-go)（Apache 2.0）。上游同步保持兼容，在此之上加自己的 adapter 和产品层。
 
-Agent Development Kit (ADK) is a flexible and modular framework that applies software development principles to AI agent creation. It is designed to simplify building, deploying, and orchestrating agent workflows, from simple tasks to complex systems. While optimized for Gemini, ADK is model-agnostic, deployment-agnostic, and compatible with other frameworks.
+## 设计纪律
 
-This Go version of ADK is ideal for developers building cloud-native agent applications, leveraging Go's strengths in concurrency and performance.
+1. **ADK-Go 是 SDK 基座**，不是产品本体
+2. **Memory / Session / Channel / Skill 都是接口**，具体后端是可替换 adapter
+3. **文本是本金，embedding 是可再生索引**
+4. **不同 embedding 模型的向量不能混在同一索引**
+5. **不绑定任何云厂商** — Oracle / PG / Neo4j 都是 adapter，不是前提
 
----
+## Adapter 路线
 
-## ✨ Key Features
+| 层 | 默认 | 可选 |
+|----|------|------|
+| Embedder | 本地 384 维 (ALL_MINILM_L6_V2 ONNX) | Voyage AI、Oracle 内置 |
+| Memory Store | PostgreSQL + pgvector | Oracle ADB (lake5)、GBrain |
+| Session | In-Memory | Oracle、PG |
+| LLM | LiteLLM proxy (sensenova deepseek-v4-flash) | 任意 OpenAI 兼容端点 |
+| Channel | — | Matrix (mautrix-go)、Gitea webhook |
+| Distribution | Nomad | — |
 
-*   **Idiomatic Go:** Designed to feel natural and leverage the power of Go.
-*   **Rich Tool Ecosystem:** Utilize pre-built tools, custom functions, or integrate existing tools to give agents diverse capabilities.
-*   **Code-First Development:** Define agent logic, tools, and orchestration directly in Go for ultimate flexibility, testability, and versioning.
-*   **Modular Multi-Agent Systems:** Design scalable applications by composing multiple specialized agents.
-*   **Deploy Anywhere:** Easily containerize and deploy agents, with strong support for cloud-native environments like Google Cloud Run.
+## 已实现
 
-## 🚀 Installation
+| 模块 | 路径 | 状态 |
+|------|------|------|
+| Oracle memory（三层+加密+向量） | `memory/oracle/` | ✅ 可用（adapter，非默认） |
+| Oracle session CRUD | `session/oracle/` | ⚠️ CLOB 绑定待修 |
+| oracle-agent 示例 | `examples/oracle-agent/` | ✅ LLM 调用通过 |
+| DDL | `memory/oracle/ddl.sql` | ✅ 已在 lake5 执行 |
+| CI flow（5 架构编译） | `.github/workflows/build-oracle-agent.yml` | ✅ 全绿 |
+| UAT 方案 | `docs/uat/` | ✅ UAT-01~04 通过 |
 
-To add ADK Go to your project, run:
+## 白嫖的艺术
 
-```bash
-go get google.golang.org/adk/v2
-```
+| 资源 | 用法 | 成本 |
+|------|------|------|
+| Oracle ADB (4 lake + 2 river) | 向量检索 + embedding | 免费额度内 |
+| PG 集群 (.201/.203/.204) | pgvector 默认后端 | 自有 |
+| 本地 384 维 ONNX embedding | 默认 embedder | 零 |
+| GH Actions | CI 编译 5 架构 | 免费 |
+| OCA S3 (教育网) | 二进制分发 | 免费 |
+| CF Worker (cernet-s3) | 公网入口 | 免费 |
 
-## 📄 License
+## Secrets 管理
 
-This project is licensed under the Apache 2.0 License - see the
-[LICENSE](LICENSE) file for details.
+- Infisical project: `secret-management` (ID: `349cc5f0-e13b-446e-a940-18a7c671146a`)
+- 自动单向同步到 GitHub Actions secrets
+- Vault / OpenBao 做运行时密钥（已就绪）
 
-The exception is internal/httprr - see its [LICENSE file](internal/httprr/LICENSE).
+## 开发状态
+
+详见 [DEV-STATUS.md](docs/DEV-STATUS.md)
