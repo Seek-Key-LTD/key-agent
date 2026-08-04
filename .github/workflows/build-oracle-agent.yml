@@ -72,11 +72,11 @@ jobs:
             --data-binary @${{ matrix.artifact_name }} \
             "https://cernet-s3.git4ta.fun/picooracle/${{ env.COMMIT }}/${{ matrix.artifact_name }}"
 
-      - name: Upload to OCI US Standard Bucket
+      - name: Upload to OCA (教育网 S3)
         env:
-          OCI_US_ACCESS_KEY: ${{ secrets.OCI_US_ACCESS_KEY }}
-          OCI_US_SECRET_KEY: ${{ secrets.OCI_US_SECRET_KEY }}
+          OCA_ACCESS_KEY: ${{ secrets.OCA_ACCESS_KEY }}
+          OCA_SECRET_KEY: ${{ secrets.OCA_SECRET_KEY }}
         run: |
           which mc || (curl -sL https://dl.min.io/client/mc/release/linux-amd64/mc -o /tmp/mc && chmod +x /tmp/mc && sudo mv /tmp/mc /usr/local/bin/mc)
-          mc alias set oci-us https://id3ssqrvafpu.compat.objectstorage.us-ashburn-1.oraclecloud.com "$OCI_US_ACCESS_KEY" "$OCI_US_SECRET_KEY" --api s3v4
-          mc cp ${{ matrix.artifact_name }} "oci-us/standard/picooracle/${{ matrix.artifact_name }}"
+          mc alias set oca https://fgws3-ocloud.ihep.ac.cn "$OCA_ACCESS_KEY" "$OCA_SECRET_KEY" --api s3v4
+          mc cp ${{ matrix.artifact_name }} "oca/21579-lhhq-164014/picooracle/${{ matrix.artifact_name }}"
