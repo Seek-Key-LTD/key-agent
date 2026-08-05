@@ -27,8 +27,8 @@ Key Agent
 |------|------|------|
 | Oracle memory adapter | `memory/oracle/` | ✅ 可用（已降级为可选 adapter，非默认） |
 | Oracle session adapter | `session/oracle/` | ⚠️ CLOB 绑定待修 |
-| oracle-agent 示例 | `examples/oracle-agent/` | ✅ LLM 调用通过（chat/completions） |
-| CI flow (5 架构) | `.github/workflows/build-oracle-agent.yml` | ✅ 全绿 |
+| k-agent 示例 | `examples/k-agent/` | ✅ LLM 调用通过（chat/completions） |
+| CI flow (5 架构) | `.github/workflows/build-k-agent.yml` | ✅ 全绿 |
 | Infisical secrets | project `secret-management` | ✅ 同步到 GH Actions |
 | GBrain MCP 连通性 | 本机 CLI 验证 | ✅ put/search/query/get 全通 |
 
@@ -105,8 +105,8 @@ Oracle        = 保留为实验 adapter, 不是路线前提
 git clone https://ghpx.git4ta.fun/github.com/Seek-Key-LTD/adk-go.git ~/Projects/github/adk-go
 cd ~/Projects/github/adk-go
 
-# 2. 本地跑 oracle-agent (验证 LLM + Oracle 连通)
-./dist/oracle-agent-linux-amd64 \
+# 2. 本地跑 k-agent (验证 LLM + Oracle 连通)
+./dist/k-agent-linux-amd64 \
   -dsn "$(curl -s http://127.0.0.1:8500/v1/kv/picooraclaw/dsn | jq -r '.[0].Value' | base64 -d)" \
   -base-url "http://100.121.16.28:4000/v1" \
   -secret "$(cat ~/.infisical/token | head -c 40)" \

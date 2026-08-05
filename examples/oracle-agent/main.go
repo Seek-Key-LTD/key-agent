@@ -1,4 +1,4 @@
-// oracle-agent is a real agent: Oracle memory + LiteLLM chat/completions.
+// k-agent is a real agent: Oracle memory + LiteLLM chat/completions.
 // It reads documents, sends them to an LLM via standard OpenAI chat API,
 // and stores results in Oracle ADB.
 package main
@@ -40,7 +40,7 @@ type chatResponse struct {
 
 func main() {
 	dsn := flag.String("dsn", os.Getenv("ORACLE_DSN"), "Oracle DSN")
-	agentName := flag.String("agent", "oracle-agent", "Agent name")
+	agentName := flag.String("agent", "k-agent", "Agent name")
 	memoryKey := flag.String("memory-key", os.Getenv("ORACLE_MEMORY_KEY"), "AES-256 key hex")
 	baseURL := flag.String("base-url", os.Getenv("OPENAI_BASE_URL"), "LLM base URL")
 	apiKey := flag.String("secret", os.Getenv("LITELLM_API_KEY"), "LLM API key")

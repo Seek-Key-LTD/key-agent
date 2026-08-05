@@ -29,9 +29,9 @@
 |------|------|------|
 | Oracle memory（三层+加密+向量） | `memory/oracle/` | ✅ 可用（adapter，非默认） |
 | Oracle session CRUD | `session/oracle/` | ⚠️ CLOB 绑定待修 |
-| oracle-agent 示例 | `examples/oracle-agent/` | ✅ LLM 调用通过 |
+| k-agent 示例 | `examples/oracle-agent/` | ✅ LLM 调用通过 |
 | DDL | `memory/oracle/ddl.sql` | ✅ 已在 lake5 执行 |
-| CI flow（5 架构编译） | `.github/workflows/build-oracle-agent.yml` | ✅ 全绿 |
+| CI flow（5 架构编译） | `.github/workflows/build-k-agent.yml` | ✅ 全绿 |
 | UAT 方案 | `docs/uat/` | ✅ UAT-01~04 通过 |
 
 ## 白嫖的艺术

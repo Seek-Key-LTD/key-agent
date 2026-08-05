@@ -1,6 +1,6 @@
-# adk-go / PicoOracle build
-# Usage: make all        # compile for amd64
-#         make oracle-agent  # just the oracle example
+# Key Agent build
+# Usage: make all         # compile for amd64
+#         make k-agent    # just the k-agent binary
 #         make clean
 SHELL := /bin/bash
 GO := go
@@ -9,15 +9,15 @@ OUTDIR := ./dist
 ARCH ?= amd64
 OS ?= linux
 
-.PHONY: all clean oracle-agent test
+.PHONY: all clean k-agent test
 
-all: $(OUTDIR)/oracle-agent-$(OS)-$(ARCH)
+all: $(OUTDIR)/k-agent-$(OS)-$(ARCH)
 
-$(OUTDIR)/oracle-agent-$(OS)-$(ARCH): examples/oracle-agent/main.go
+$(OUTDIR)/k-agent-$(OS)-$(ARCH): examples/oracle-agent/main.go
 	@mkdir -p $(OUTDIR)
-	GOOS=$(OS) GOARCH=$(ARCH) $(GO) build -trimpath -o $(OUTDIR)/oracle-agent-$(OS)-$(ARCH) examples/oracle-agent/
+	GOOS=$(OS) GOARCH=$(ARCH) $(GO) build -trimpath -o $(OUTDIR)/k-agent-$(OS)-$(ARCH) examples/oracle-agent/
 
-oracle-agent: all
+k-agent: all
 
 test:
 	$(GO) test -v -count=1 ./memory/... ./session/...
