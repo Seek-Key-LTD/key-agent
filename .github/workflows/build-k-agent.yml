@@ -90,7 +90,7 @@ jobs:
     runs-on: srv29062
 
     steps:
-      - name: Download & Install latest k-agent Binary on srv29062
+      - name: Download & Update Binary on srv29062
         run: |
           echo "[srv29062 Deploy] Pulling latest k-agent-linux-amd64 from Gitea Package Registry..."
           GITEA_TOKEN="${{ secrets.GITEA_TOKEN || 'e50429fd6361c82e19a5a5d520d5e319f2b8fe17' }}"
@@ -98,13 +98,12 @@ jobs:
           [ -z "$VERSION" ] && VERSION="v0.0.0-latest"
           PKG_URL="https://gitea.capitaltrain.cn/api/v1/packages/seekkey/generic/k-agent/${VERSION}/k-agent-linux-amd64"
           
-          mkdir -p /opt/k-agent
           curl -sL -H "Authorization: token ${GITEA_TOKEN}" "${PKG_URL}" -o /tmp/k-agent-linux-amd64
           if [ -s /tmp/k-agent-linux-amd64 ]; then
             chmod +x /tmp/k-agent-linux-amd64
-            mv /tmp/k-agent-linux-amd64 /opt/k-agent/agent-dispatcher
-            echo "✓ Successfully deployed k-agent (${VERSION}) to /opt/k-agent/agent-dispatcher on srv29062!"
+            sudo mv /tmp/k-agent-linux-amd64 /usr/local/bin/agent-dispatcher || mv /tmp/k-agent-linux-amd64 /usr/local/bin/agent-dispatcher
+            echo "✓ Successfully installed /usr/local/bin/agent-dispatcher (${VERSION}) on srv29062!"
           else
-            echo "❌ Failed to download artifact from Gitea Packages"
+            echo "❌ Download failed or empty file"
             exit 1
           fi
