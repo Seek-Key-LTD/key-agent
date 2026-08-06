@@ -109,3 +109,19 @@ jobs:
             echo "❌ Download failed or empty file"
             exit 1
           fi
+
+
+  deploy-onyx:
+    name: Deploy to Onyx (K8S Pod via pawsg1-ursa)
+    needs: build-and-publish
+    runs-on: pawsg:host
+    steps:
+      - name: Fetch Latest k-agent Binary and Update Onyx Agent
+        run: |
+          echo "[Onyx Deploy] Downloading latest binary from Gitea Package Registry..."
+          mkdir -p /usr/local/bin
+          curl -sSL "https://gitea.capitaltrain.cn/api/v1/packages/seekkey/generic/k-agent/latest/k-agent-linux-amd64" -o /usr/local/bin/agent-dispatcher
+          chmod +x /usr/local/bin/agent-dispatcher
+          echo "[Onyx Deploy] Restarting agent-dispatcher under supervisord..."
+          supervisorctl restart agent-dispatcher || pkill -f agent-dispatcher || true
+          echo "✓ Onyx Deployment Complete!"
