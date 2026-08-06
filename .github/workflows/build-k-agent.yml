@@ -14,19 +14,15 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      - name: Set up Go
-        uses: actions/setup-go@v4
-        with:
-          go-version: '1.22'
-
-      - name: Build and Publish Binaries
+      - name: Build and Publish Binaries (Using Local Native Go)
         run: |
+          echo "Using local native Go version: $(go version)"
           VERSION="${GITHUB_REF_NAME:-latest}"
           echo "Building KeyAgent binaries for version: ${VERSION}"
           
           mkdir -p dist
           
-          # Build 5 platforms
+          # Build 5 platforms using NUC's local native Go
           GOOS=linux GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o dist/k-agent-linux-amd64 ./cmd/agent_dispatcher
           GOOS=linux GOARCH=arm64 go build -trimpath -ldflags="-s -w" -o dist/k-agent-linux-arm64 ./cmd/agent_dispatcher
           GOOS=linux GOARCH=arm GOARM=7 go build -trimpath -ldflags="-s -w" -o dist/k-agent-linux-armv7 ./cmd/agent_dispatcher
