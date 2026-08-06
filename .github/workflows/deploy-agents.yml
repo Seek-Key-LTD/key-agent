@@ -1,4 +1,4 @@
-name: Deploy Edge Nodes (Germany & Singapore Onyx)
+name: Deploy Edge Nodes (Germany)
 
 on:
   workflow_dispatch:
@@ -7,7 +7,7 @@ on:
 
 jobs:
   deploy-germany:
-    name: Deploy to Germany LXC Node (srv29062)
+    name: Deploy to Germany LXC Node (srv29062 / zhuyu)
     runs-on: srv29062
     steps:
       - name: Fetch Package from Gitea Registry & Restart
@@ -16,18 +16,4 @@ jobs:
           curl -sSL "https://gitea.capitaltrain.cn/api/v1/packages/seekkey/generic/k-agent/latest/k-agent-linux-amd64" -o /usr/local/bin/agent-dispatcher
           chmod +x /usr/local/bin/agent-dispatcher
           pkill -f agent-dispatcher || true
-          echo "✓ Germany LXC Node Deployed Successfully!"
-
-  deploy-singapore-onyx:
-    name: Deploy to Singapore Onyx K8S Pod (pawsg1-ursa)
-    runs-on: pawsg:host
-    steps:
-      - name: Fetch Package from Gitea Registry & Restart under Supervisord
-        run: |
-          echo "[Onyx Deploy] Fetching compiled k-agent-linux-amd64 via gitea-for-pawsg..."
-          mkdir -p /usr/local/bin
-          curl -sSL "https://gitea-for-pawsg.git4ta.fun/api/v1/packages/seekkey/generic/k-agent/latest/k-agent-linux-amd64" -o /usr/local/bin/agent-dispatcher
-          chmod +x /usr/local/bin/agent-dispatcher
-          echo "[Onyx Deploy] Binary updated. Restarting agent-dispatcher under Supervisord..."
-          supervisorctl restart agent-dispatcher || pkill -f agent-dispatcher || true
-          echo "✓ Singapore Onyx K8S Pod Deployed Successfully!"
+          echo "✓ Germany LXC Node (zhuyu) Deployed Successfully!"
