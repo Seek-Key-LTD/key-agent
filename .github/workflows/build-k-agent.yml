@@ -1,4 +1,4 @@
-name: Build and Deploy KeyAgent
+name: Build and Publish KeyAgent Binaries (NUC Factory)
 
 on:
   push:
@@ -8,21 +8,22 @@ on:
 
 jobs:
   build-and-publish:
-    name: Build Multi-Arch Binaries and Publish to Gitea Package Registry
+    name: Build 5-Arch Binaries on NUC & Publish to Gitea Registry
     runs-on: nuc:host
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      - name: Build and Publish Binaries (Using Local Native Go)
+      - name: Build and Publish Binaries to Package Registry
         run: |
-          echo "Using local native Go version: $(go version)"
+          echo "=========================================================="
+          echo "🚀 [NUC Factory] Using Local Native Go: $(go version)"
+          echo "=========================================================="
           VERSION="${GITHUB_REF_NAME:-latest}"
-          echo "Building KeyAgent binaries for version: ${VERSION}"
           
           mkdir -p dist
           
-          # Build 5 platforms using NUC's local native Go
+          # Build 5 platforms
           GOOS=linux GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o dist/k-agent-linux-amd64 ./cmd/agent_dispatcher
           GOOS=linux GOARCH=arm64 go build -trimpath -ldflags="-s -w" -o dist/k-agent-linux-arm64 ./cmd/agent_dispatcher
           GOOS=linux GOARCH=arm GOARM=7 go build -trimpath -ldflags="-s -w" -o dist/k-agent-linux-armv7 ./cmd/agent_dispatcher
@@ -35,32 +36,6 @@ jobs:
             echo "Uploading ${filename} to Gitea Package Registry..."
             curl --user "${{ secrets.GITEA_USER }}:${{ secrets.GITEA_TOKEN }}"               --upload-file "$file"               "https://gitea.capitaltrain.cn/api/v1/packages/seekkey/generic/k-agent/${VERSION}/${filename}"
             
-            # Also update latest tag
             curl --user "${{ secrets.GITEA_USER }}:${{ secrets.GITEA_TOKEN }}"               --upload-file "$file"               "https://gitea.capitaltrain.cn/api/v1/packages/seekkey/generic/k-agent/latest/${filename}"
           done
-
-  deploy-srv29062:
-    name: Deploy to Germany LXC Node (srv29062)
-    needs: build-and-publish
-    runs-on: srv29062
-    steps:
-      - name: Fetch Latest Binary Package
-        run: |
-          echo "[srv29062 Deploy] Fetching compiled k-agent-linux-amd64 from Package Registry..."
-          curl -sSL "https://gitea.capitaltrain.cn/api/v1/packages/seekkey/generic/k-agent/latest/k-agent-linux-amd64" -o /usr/local/bin/agent-dispatcher
-          chmod +x /usr/local/bin/agent-dispatcher
-          pkill -f agent-dispatcher || true
-
-  deploy-onyx:
-    name: Deploy to Onyx K8S Pod (No Build - Pure Package Fetch)
-    needs: build-and-publish
-    runs-on: pawsg:host
-    steps:
-      - name: Fetch Package from Gitea Registry
-        run: |
-          echo "[Onyx Deploy] Fetching compiled k-agent-linux-amd64 from Package Registry..."
-          mkdir -p /usr/local/bin
-          curl -sSL "https://gitea.capitaltrain.cn/api/v1/packages/seekkey/generic/k-agent/latest/k-agent-linux-amd64" -o /usr/local/bin/agent-dispatcher
-          chmod +x /usr/local/bin/agent-dispatcher
-          echo "[Onyx Deploy] Binary fetched cleanly. Restarting daemon under Supervisord..."
-          supervisorctl restart agent-dispatcher || pkill -f agent-dispatcher || true
+          echo "✓ Binaries published successfully!"
