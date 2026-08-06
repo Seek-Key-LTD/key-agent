@@ -20,7 +20,7 @@ concurrency:
 
 jobs:
   discover:
-    runs-on: ubuntu-latest
+    runs-on: nuc:host
     outputs:
       modules: ${{ steps.set-modules.outputs.modules }}
     steps:
@@ -32,7 +32,7 @@ jobs:
 
   test:
     needs: discover
-    runs-on: ubuntu-latest
+    runs-on: nuc:host
     strategy:
       fail-fast: false
       matrix:
@@ -60,7 +60,7 @@ jobs:
   
   lint:
     needs: discover
-    runs-on: ubuntu-latest
+    runs-on: nuc:host
     strategy:
       fail-fast: false
       matrix:
@@ -82,7 +82,7 @@ jobs:
         version: 5256574b81bcedfbcae9099f745f6aee9335da10 # v2.3.1
 
   guardrail:
-    runs-on: ubuntu-latest
+    runs-on: nuc:host
     steps:
     - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
     
