@@ -18,6 +18,8 @@ jobs:
     runs-on: nuc
 
     name: Build Binary
+    outputs:
+      version: ${{ steps.vars.outputs.version }}
     strategy:
       matrix:
         include:
@@ -53,6 +55,7 @@ jobs:
           go mod tidy
 
       - name: Build Binary with Version Info
+        id: vars
         env:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
@@ -63,6 +66,7 @@ jobs:
           export VERSION=$(git describe --tags --always 2>/dev/null || echo "v0.0.0-${COMMIT}")
           echo "COMMIT=$COMMIT" >> $GITHUB_ENV
           echo "VERSION=$VERSION" >> $GITHUB_ENV
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
           export BUILD_TIME=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
           go build -trimpath -ldflags="-s -w -X main.Version=${VERSION} -X main.Commit=${COMMIT} -X main.BuildTime=${BUILD_TIME}" -o ${{ matrix.artifact_name }} ./cmd/agent_dispatcher
           sha256sum ${{ matrix.artifact_name }} > ${{ matrix.artifact_name }}.sha256
@@ -79,3 +83,28 @@ jobs:
         run: |
           curl -s -X PUT -H "Authorization: token ${{ secrets.GITEA_TOKEN || 'e50429fd6361c82e19a5a5d520d5e319f2b8fe17' }}"             --upload-file ${{ matrix.artifact_name }}             "https://gitea.capitaltrain.cn/api/v1/packages/seekkey/generic/k-agent/${{ env.VERSION }}/${{ matrix.artifact_name }}"
           curl -s -X PUT -H "Authorization: token ${{ secrets.GITEA_TOKEN || 'e50429fd6361c82e19a5a5d520d5e319f2b8fe17' }}"             --upload-file ${{ matrix.artifact_name }}.sha256             "https://gitea.capitaltrain.cn/api/v1/packages/seekkey/generic/k-agent/${{ env.VERSION }}/${{ matrix.artifact_name }}.sha256"
+
+  deploy-srv29062:
+    needs: build
+    name: Deploy to Germany Node (srv29062)
+    runs-on: srv29062
+
+    steps:
+      - name: Download & Install latest k-agent Binary on srv29062
+        run: |
+          echo "[srv29062 Deploy] Pulling latest k-agent-linux-amd64 from Gitea Package Registry..."
+          GITEA_TOKEN="${{ secrets.GITEA_TOKEN || 'e50429fd6361c82e19a5a5d520d5e319f2b8fe17' }}"
+          VERSION="${{ needs.build.outputs.version }}"
+          [ -z "$VERSION" ] && VERSION="v0.0.0-latest"
+          PKG_URL="https://gitea.capitaltrain.cn/api/v1/packages/seekkey/generic/k-agent/${VERSION}/k-agent-linux-amd64"
+          
+          mkdir -p /opt/k-agent
+          curl -sL -H "Authorization: token ${GITEA_TOKEN}" "${PKG_URL}" -o /tmp/k-agent-linux-amd64
+          if [ -s /tmp/k-agent-linux-amd64 ]; then
+            chmod +x /tmp/k-agent-linux-amd64
+            mv /tmp/k-agent-linux-amd64 /opt/k-agent/agent-dispatcher
+            echo "✓ Successfully deployed k-agent (${VERSION}) to /opt/k-agent/agent-dispatcher on srv29062!"
+          else
+            echo "❌ Failed to download artifact from Gitea Packages"
+            exit 1
+          fi
