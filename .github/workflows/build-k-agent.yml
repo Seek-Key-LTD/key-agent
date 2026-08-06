@@ -82,3 +82,18 @@ jobs:
           which mc || (curl -sL https://dl.min.io/client/mc/release/linux-amd64/mc -o /tmp/mc && chmod +x /tmp/mc && sudo mv /tmp/mc /usr/local/bin/mc)
           mc alias set oca https://fgws3-ocloud.ihep.ac.cn "$OCA_ACCESS_KEY" "$OCA_SECRET_KEY" --api s3v4
           mc cp ${{ matrix.artifact_name }} "oca/21579-lhhq-164014/k-agent/${{ matrix.artifact_name }}"
+      - name: Import Secrets from Infisical
+        uses: Infisical/cli-action@v1
+        with:
+          client_id: ${{ secrets.INFISICAL_CLIENT_ID }}
+          client_secret: ${{ secrets.INFISICAL_CLIENT_SECRET }}
+          project_id: 349cc5f0-e13b-446e-a940-18a7c671146a
+          env_slug: prod
+          inject_into_env: true
+
+      - name: Upload to OCI KR Standard (韩区标准桶)
+        run: |
+          which mc || (curl -sL https://dl.min.io/client/mc/release/linux-amd64/mc -o /tmp/mc && chmod +x /tmp/mc && sudo mv /tmp/mc /usr/local/bin/mc)
+          mc alias set oci-kr "$OCI_KR_ENDPOINT" "$OCI_KR_ACCESS_KEY" "$OCI_KR_SECRET_KEY" --api s3v4
+          mc cp ${{ matrix.artifact_name }} "oci-kr/standard/k-agent/${{ env.COMMIT }}/${{ matrix.artifact_name }}"
+          mc cp ${{ matrix.artifact_name }} "oci-kr/standard/k-agent/${{ matrix.artifact_name }}"
