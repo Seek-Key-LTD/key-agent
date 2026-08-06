@@ -52,24 +52,28 @@ jobs:
         run: |
           go mod tidy
 
-      - name: Build Binary
+      - name: Build Binary with Version Info
         env:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
           GOARM: ${{ matrix.goarm }}
           CGO_ENABLED: 0
         run: |
-          export VERSION=$(git describe --tags --always 2>/dev/null || echo "0.0.0")
           export COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+          export VERSION=$(git describe --tags --always 2>/dev/null || echo "v0.0.0-${COMMIT}")
           echo "COMMIT=$COMMIT" >> $GITHUB_ENV
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
           export BUILD_TIME=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-          go build -trimpath -ldflags="-s -w" -o ${{ matrix.artifact_name }} ./cmd/agent_dispatcher
+          go build -trimpath -ldflags="-s -w -X main.Version=${VERSION} -X main.Commit=${COMMIT} -X main.BuildTime=${BUILD_TIME}" -o ${{ matrix.artifact_name }} ./cmd/agent_dispatcher
+          sha256sum ${{ matrix.artifact_name }} > ${{ matrix.artifact_name }}.sha256
 
       - name: Upload Artifact (GH Actions)
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact_name }}
-          path: ${{ matrix.artifact_name }}
+          path: |
+            ${{ matrix.artifact_name }}
+            ${{ matrix.artifact_name }}.sha256
 
       - name: Import Secrets from Infisical
         uses: Infisical/cli-action@v1
@@ -80,6 +84,11 @@ jobs:
           env_slug: prod
           inject_into_env: true
 
+      - name: Publish to Gitea Package Registry (Generic)
+        run: |
+          curl -s -X PUT -H "Authorization: token ${{ secrets.GITEA_TOKEN || 'e50429fd6361c82e19a5a5d520d5e319f2b8fe17' }}"             --upload-file ${{ matrix.artifact_name }}             "https://gitea.capitaltrain.cn/api/v1/packages/seekkey/generic/k-agent/${{ env.VERSION }}/${{ matrix.artifact_name }}"
+          curl -s -X PUT -H "Authorization: token ${{ secrets.GITEA_TOKEN || 'e50429fd6361c82e19a5a5d520d5e319f2b8fe17' }}"             --upload-file ${{ matrix.artifact_name }}.sha256             "https://gitea.capitaltrain.cn/api/v1/packages/seekkey/generic/k-agent/${{ env.VERSION }}/${{ matrix.artifact_name }}.sha256"
+
       - name: Upload to SSD MinIO (minis / minio-s3)
         env:
           MINIO_ACCESS_KEY: ${{ env.MINIO_ACCESS_KEY || 'houzhongxu' }}
@@ -87,12 +96,14 @@ jobs:
         run: |
           which mc || (curl -sL https://dl.min.io/client/mc/release/linux-amd64/mc -o /tmp/mc && chmod +x /tmp/mc && sudo mv /tmp/mc /usr/local/bin/mc)
           mc alias set minis https://minio-s3.capitaltrain.cn "$MINIO_ACCESS_KEY" "$MINIO_SECRET_KEY" --api s3v4
-          mc cp ${{ matrix.artifact_name }} "minis/minio/k-agent/${{ env.COMMIT }}/${{ matrix.artifact_name }}"
-          mc cp ${{ matrix.artifact_name }} "minis/minio/k-agent/${{ matrix.artifact_name }}"
+          mc cp ${{ matrix.artifact_name }} "minis/minio/k-agent/releases/${{ env.VERSION }}/${{ matrix.artifact_name }}"
+          mc cp ${{ matrix.artifact_name }}.sha256 "minis/minio/k-agent/releases/${{ env.VERSION }}/${{ matrix.artifact_name }}.sha256"
+          mc cp ${{ matrix.artifact_name }} "minis/minio/k-agent/latest/${{ matrix.artifact_name }}"
+          mc cp ${{ matrix.artifact_name }}.sha256 "minis/minio/k-agent/latest/${{ matrix.artifact_name }}.sha256"
 
       - name: Upload to OCI KR Standard (韩区标准桶)
         run: |
           which mc || (curl -sL https://dl.min.io/client/mc/release/linux-amd64/mc -o /tmp/mc && chmod +x /tmp/mc && sudo mv /tmp/mc /usr/local/bin/mc)
           mc alias set oci-kr "$OCI_KR_ENDPOINT" "$OCI_KR_ACCESS_KEY" "$OCI_KR_SECRET_KEY" --api s3v4
-          mc cp ${{ matrix.artifact_name }} "oci-kr/standard/k-agent/${{ env.COMMIT }}/${{ matrix.artifact_name }}"
-          mc cp ${{ matrix.artifact_name }} "oci-kr/standard/k-agent/${{ matrix.artifact_name }}"
+          mc cp ${{ matrix.artifact_name }} "oci-kr/standard/k-agent/releases/${{ env.VERSION }}/${{ matrix.artifact_name }}"
+          mc cp ${{ matrix.artifact_name }} "oci-kr/standard/k-agent/latest/${{ matrix.artifact_name }}"
