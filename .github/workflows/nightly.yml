@@ -8,7 +8,7 @@ on:
 
 jobs:
   discover:
-    runs-on: ubuntu-latest
+    runs-on: nuc:host
     outputs:
       modules: ${{ steps.set-modules.outputs.modules }}
     steps:
@@ -20,7 +20,7 @@ jobs:
 
   test:
     needs: discover
-    runs-on: ubuntu-latest
+    runs-on: nuc:host
     strategy:
       fail-fast: false
       matrix:
@@ -38,7 +38,7 @@ jobs:
 
   vulncheck:
     needs: discover
-    runs-on: ubuntu-latest
+    runs-on: nuc:host
     strategy:
       fail-fast: false
       matrix:
