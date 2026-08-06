@@ -9,7 +9,7 @@ on:
 jobs:
   build-and-publish:
     name: Build Multi-Arch Binaries and Publish to Gitea Package Registry
-    runs-on: nuc
+    runs-on: nuc:host
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
