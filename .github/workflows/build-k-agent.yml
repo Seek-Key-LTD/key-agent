@@ -8,10 +8,9 @@ on:
 
 jobs:
   build:
-    if: github.server_url == 'https://github.com'
+    runs-on: amd64
 
     name: Build Binary
-    runs-on: ubuntu-latest
     strategy:
       matrix:
         include:
