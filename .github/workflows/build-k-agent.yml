@@ -34,9 +34,9 @@ jobs:
           for file in dist/*; do
             filename=$(basename "$file")
             echo "Uploading ${filename} to Gitea Package Registry..."
-            curl -f --user "${{ secrets.GITEA_USER }}:${{ secrets.GITEA_TOKEN }}"               --upload-file "$file"               "https://gitea.capitaltrain.cn/api/packages/seekkey/generic/k-agent/${VERSION}/${filename}" || { echo "❌ UPLOAD FAILED: ${filename} → ${VERSION}"; exit 1; }
+            curl -f -H "Authorization: token ${{ secrets.GITEA_TOKEN }}"               --upload-file "$file"               "https://gitea.capitaltrain.cn/api/packages/seekkey/generic/k-agent/${VERSION}/${filename}" || { echo "❌ UPLOAD FAILED: ${filename} → ${VERSION}"; exit 1; }
             
-            curl -f --user "${{ secrets.GITEA_USER }}:${{ secrets.GITEA_TOKEN }}"               --upload-file "$file"               "https://gitea.capitaltrain.cn/api/packages/seekkey/generic/k-agent/latest/${filename}" || { echo "❌ UPLOAD FAILED: ${filename} → latest"; exit 1; }
+            curl -f -H "Authorization: token ${{ secrets.GITEA_TOKEN }}"               --upload-file "$file"               "https://gitea.capitaltrain.cn/api/packages/seekkey/generic/k-agent/latest/${filename}" || { echo "❌ UPLOAD FAILED: ${filename} → latest"; exit 1; }
           done
           echo "✓ Binaries published successfully!"
 
