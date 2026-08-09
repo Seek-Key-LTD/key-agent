@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/a2aproject/a2a-go/v2/a2a"
+	"google.golang.org/adk/v2/auth"
 	"github.com/a2aproject/a2a-go/v2/a2asrv"
 )
 
@@ -100,6 +101,10 @@ func main() {
 	}
 	agentDesc := os.Getenv("AGENT_DESCRIPTION")
 	agentSkills := os.Getenv("AGENT_SKILLS")
+	userInfoURL := os.Getenv("AUTHENTIK_USERINFO_URL")
+	if userInfoURL == "" {
+		userInfoURL = "https://authentik.capitaltrain.cn/application/o/userinfo/"
+	}
 
 	executor := &AgentExecutor{LLMBaseURL: baseURL, LLMAPIKey: apiKey, LLMModel: model}
 
@@ -122,7 +127,7 @@ func main() {
 
 	// HTTP mux
 	mux := http.NewServeMux()
-	mux.Handle("/a2a", handler)
+	mux.Handle("/a2a", auth.AuthentikUserInfoMiddleware(userInfoURL, handler))
 	mux.Handle("/.well-known/agent-card.json", a2asrv.NewStaticAgentCardHandler(card))
 
 	log.Printf("[%s] A2A Agent Server listening on %s (model=%s)", agentName, addr, model)
