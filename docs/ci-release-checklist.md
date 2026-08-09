@@ -65,7 +65,16 @@ sudo systemctl daemon-reload && sudo systemctl restart gitea-runner
 
 ## 防复发机制（2026-08-09 已落地）
 
-1. ✅ build job 增加 Verify step：上传后回读 registry 比对大小，不一致即红
+1. ✅ build job 增加 Verify step：上传后回读 registry 逐文件 **SHA256 比对**，不一致即红（曾用大小比对，已升级哈希）
 2. ✅ runner 由 systemd 托管 + 重注册（本文件第 4 条）
 3. ✅ 升级 Checklist（本文件上一节）
-4. 冒烟演练：发布后手动 `nomad job restart keyagent` + 抽查节点日志（尚未自动化，见 TODO）
+4. ✅ 上传 `curl -f` 失败即退出（防假成功——8-06 起 CI 曾静默 401 假 success）
+5. ✅ 冒烟演练：发布后手动 `nomad job restart keyagent` + 抽查节点日志（尚未自动化，见 TODO）
+
+## 2026-08-09 当日新增踩坑（已修）
+
+- **secrets 从未存在**：仓库 secrets 列表一度为 `[]`——workflow 引用 `secrets.GITEA_TOKEN` 一直是**空值**，curl 401 但脚本不退出 → 假 success。Verify step 首跑即抓出。
+- **Gitea secret 命名保留字**：`GITEA_TOKEN` 以 `GITEA_` 开头，API 返回 400 `invalid variable or secret name`（Gitea 保留前缀，类似 GitHub 保留 `GITHUB_`）。换名 `KAGENT_PKG_TOKEN` 后 PUT 201。
+- **secrets API 格式**：PUT `/api/v1/repos/{owner}/{repo}/actions/secrets/{name}`，body 必须 `{"data": "..."}`（`value` 字段会 422 `[Data]: Required`）。
+- **generic 包同名禁止覆盖**：Gitea generic 包上传已存在文件名 → 409（除非先删）。CI 上传前必须先 `DELETE` 旧文件再 `PUT`。
+- **当前 secret 值**：`KAGENT_PKG_TOKEN` = ruby token（aa5dc7…），有 packages 写权限。
