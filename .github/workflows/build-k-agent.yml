@@ -34,24 +34,27 @@ jobs:
           for file in dist/*; do
             filename=$(basename "$file")
             echo "Uploading ${filename} to Gitea Package Registry..."
-            curl --user "${{ secrets.GITEA_USER }}:${{ secrets.GITEA_TOKEN }}"               --upload-file "$file"               "https://gitea.capitaltrain.cn/api/packages/seekkey/generic/k-agent/${VERSION}/${filename}"
+            curl -f --user "${{ secrets.GITEA_USER }}:${{ secrets.GITEA_TOKEN }}"               --upload-file "$file"               "https://gitea.capitaltrain.cn/api/packages/seekkey/generic/k-agent/${VERSION}/${filename}" || { echo "❌ UPLOAD FAILED: ${filename} → ${VERSION}"; exit 1; }
             
-            curl --user "${{ secrets.GITEA_USER }}:${{ secrets.GITEA_TOKEN }}"               --upload-file "$file"               "https://gitea.capitaltrain.cn/api/packages/seekkey/generic/k-agent/latest/${filename}"
+            curl -f --user "${{ secrets.GITEA_USER }}:${{ secrets.GITEA_TOKEN }}"               --upload-file "$file"               "https://gitea.capitaltrain.cn/api/packages/seekkey/generic/k-agent/latest/${filename}" || { echo "❌ UPLOAD FAILED: ${filename} → latest"; exit 1; }
           done
           echo "✓ Binaries published successfully!"
 
-      - name: Verify Registry Artifacts (fail on mismatch)
+      - name: Verify Registry Artifacts (SHA256 mismatch → fail)
         run: |
-          # 回读 latest 产物，逐文件比对大小——防‘上传了但没生效’的静默失败
-          echo "🔍 Verifying registry artifacts (size check)..."
+          # 回读 latest 产物，逐文件比对 SHA256——防‘上传了但没生效’的静默失败
+          echo "🔍 Verifying registry artifacts (SHA256)..."
           for file in dist/*; do
             filename=$(basename "$file")
-            local_size=$(stat -c%s "$file")
-            remote_size=$(curl -sL -o /tmp/verify_${filename} -w "%{size_download}" -H "Authorization: token ${{ secrets.GITEA_TOKEN }}" "https://gitea.capitaltrain.cn/api/packages/seekkey/generic/k-agent/latest/${filename}")
-            if [ "$remote_size" != "$local_size" ]; then
-              echo "❌ VERIFY FAILED: ${filename} local=${local_size} remote=${remote_size}"
+            local_sha=$(sha256sum "$file" | awk '{print $1}')
+            curl -sfL -H "Authorization: token ${{ secrets.GITEA_TOKEN }}" -o "/tmp/verify_${filename}" "https://gitea.capitaltrain.cn/api/packages/seekkey/generic/k-agent/latest/${filename}" || { echo "❌ DOWNLOAD FAILED: ${filename}"; exit 1; }
+            remote_sha=$(sha256sum "/tmp/verify_${filename}" | awk '{print $1}')
+            if [ "$remote_sha" != "$local_sha" ]; then
+              echo "❌ SHA256 MISMATCH: ${filename}"
+              echo "   local : $local_sha"
+              echo "   remote: $remote_sha"
               exit 1
             fi
-            echo "✅ ${filename}: ${local_size} bytes verified (registry latest matches build)"
+            echo "✅ ${filename}: ${local_sha:0:12}… (SHA256 verified)"
           done
           echo "✓ All 5 artifacts verified — registry is consistent with this build."
