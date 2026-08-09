@@ -30,13 +30,15 @@ jobs:
           GOOS=darwin GOARCH=arm64 go build -trimpath -ldflags '-s -w' -o dist/k-agent-darwin-arm64 ./cmd/agent_dispatcher
           GOOS=windows GOARCH=amd64 go build -trimpath -ldflags '-s -w' -o dist/k-agent-windows-amd64.exe ./cmd/agent_dispatcher
 
-          # Publish to Gitea Package Registry
+          # Publish to Gitea Package Registry (generic 包同名禁止覆盖 → 先删旧再传)
           for file in dist/*; do
             filename=$(basename "$file")
             echo "Uploading ${filename} to Gitea Package Registry..."
-            curl -f -H "Authorization: token ${{ secrets.KAGENT_PKG_TOKEN }}"               --upload-file "$file"               "https://gitea.capitaltrain.cn/api/packages/seekkey/generic/k-agent/${VERSION}/${filename}" || { echo "❌ UPLOAD FAILED: ${filename} → ${VERSION}"; exit 1; }
-            
-            curl -f -H "Authorization: token ${{ secrets.KAGENT_PKG_TOKEN }}"               --upload-file "$file"               "https://gitea.capitaltrain.cn/api/packages/seekkey/generic/k-agent/latest/${filename}" || { echo "❌ UPLOAD FAILED: ${filename} → latest"; exit 1; }
+            for target in "${VERSION}" "latest"; do
+              # 删除已存在的同名文件（不存在时 404 忽略）
+              curl -sf -X DELETE -H "Authorization: token ${{ secrets.KAGENT_PKG_TOKEN }}"               "https://gitea.capitaltrain.cn/api/packages/seekkey/generic/k-agent/${target}/${filename}" || true
+              curl -f -H "Authorization: token ${{ secrets.KAGENT_PKG_TOKEN }}"               --upload-file "$file"               "https://gitea.capitaltrain.cn/api/packages/seekkey/generic/k-agent/${target}/${filename}" || { echo "❌ UPLOAD FAILED: ${filename} → ${target}"; exit 1; }
+            done
           done
           echo "✓ Binaries published successfully!"
 
