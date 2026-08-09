@@ -11,8 +11,10 @@ jobs:
     name: Build 5-Arch Binaries on NUC & Publish to Gitea Registry
     runs-on: nuc
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
+      - name: Checkout code (内网 Gitea clone，避免 github.com 间歇不可达)
+        run: |
+          git clone --depth 1 --branch main \
+            https://oauth2:${{ secrets.KAGENT_PKG_TOKEN }}@gitea.capitaltrain.cn/seekkey/key-agent.git .
 
       - name: Build and Publish Binaries to Package Registry
         run: |
