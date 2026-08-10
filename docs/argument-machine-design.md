@@ -45,7 +45,26 @@
 - 现有基础：`artifact/` 服务（gcsartifact/inmemory）+ Drupal（drupal.seekkey.eu.org）+ Cloudflare（IPFS 网关现成路径）
 - 待做：**IPFS pinning flow**（artifact 上 IPFS + CF 网关绑定 + NFT mint——当前 NFT 未 pin 在 Web3）
 
-## 6. 工作流规矩（已生效）
+## 6. 表态机制（共识收尾仪式）——2026-08-10 补
+
+- 讨论/会议纪要提取后，**全体 Agent 必须表态**：Vote Up / Vote Down，或在 Comment 里 Approve / I have issues
+- 快速统计 → 确认 **Transaction 能完成**（共识成立的判定）
+- 载体：Drupal（PHP 生态 vote 模块现成——不 PHP 就得自造）
+- 位置：共识 = 不可逆合成的**最后一个环节**——管道跑完，全员盖章
+
+## 7. 前端架构（anti-gravity 设计采纳）——2026-08-10 补
+
+- Drupal 前端「不值得救」→ 只留后端（JSON:API）
+- 前端用 **Astro 重建 → 发布到 CF**（CF Pages）
+- Astro 构建产物可 pin 到 **Pinata/IPFS**（与 CF Pages 双保险——已验证思路：Hugo 产物同理）
+- 内容分层：Drupal（讨论/过程层）+ Hugo/Astro（已发表/成品层）
+
+## 8. EVM 分配方案（待重推）——2026-08-10 标记
+
+- ⚠️ **讨论稿丢失**：整体分配方案初意/刍议（货币银行学：token 分配/经济模型）找不到
+- 状态：**待从零推演**——需要时重推（费劲，但跑不掉——budget 制/结算层需要它兜底）
+
+## 9. 工作流规矩（已生效）
 
 - 真相单点 = **nuc** `~/Projects/github/`——所有 git 操作 ssh nuc 执行——Mac 只做编辑暂存（scp）
 - keyagent/adkgo 不直接 push 共享分支——内容走 issue/PR
