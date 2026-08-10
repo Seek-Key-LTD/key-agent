@@ -1,0 +1,110 @@
+name: Documentation Gate
+description: 阻止无文档的代码变更进入仓库
+
+on:
+  pull_request:
+    branches:
+      - main
+      - develop
+
+jobs:
+  doc-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect PR type
+        id: pr-type
+        run: |
+          # 检查 PR 标签
+          LABELS="${{ gitea.event.pull_request.labels.*.name }}"
+          echo "labels=$LABELS" >> $GITHUB_OUTPUT
+
+          # 检查是否为 docs-only PR
+          FILES=$(git diff --name-only origin/${{ gitea.event.pull_request.base.ref }} HEAD)
+          CODE_FILES=$(echo "$FILES" | grep -E '\.(go|proto|yaml|yml)$' || true)
+          DOC_FILES=$(echo "$FILES" | grep -E '\.(md)$|docs/|\.gitea/' || true)
+
+          if [ -z "$CODE_FILES" ] && [ -n "$DOC_FILES" ]; then
+            echo "type=docs-only" >> $GITHUB_OUTPUT
+          elif echo "$LABELS" | grep -q "skip-doc-check"; then
+            echo "type=skip-labeled" >> $GITHUB_OUTPUT
+          else
+            echo "type=normal" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Check documentation compliance
+        if: steps.pr-type.outputs.type == 'normal'
+        run: |
+          set -euo pipefail
+
+          BASE_REF="origin/${{ gitea.event.pull_request.base.ref }}"
+          CODE_CHANGED=$(git diff --name-only "$BASE_REF" HEAD -- '*.go' '*.proto' | wc -l)
+          DOC_CHANGED=$(git diff --name-only "$BASE_REF" HEAD -- 'docs/**' 'README.md' 'ARCHITECTURE.md' '*.md' | wc -l)
+
+          echo "代码文件变更: $CODE_CHANGED"
+          echo "文档文件变更: $DOC_CHANGED"
+
+          if [ "$CODE_CHANGED" -gt 0 ] && [ "$DOC_CHANGED" -eq 0 ]; then
+            echo ""
+            echo "========================================="
+            echo "❌ 文档门禁未通过"
+            echo "========================================="
+            echo ""
+            echo "本 PR 修改了代码文件但未更新任何文档。"
+            echo ""
+            echo "请执行以下任一操作："
+            echo "  1. 更新相关文档（README.md / docs/ / ARCHITECTURE.md）"
+            echo "  2. 新增 ADR（docs/adr/NNNN-title.md）"
+            echo "  3. 在 PR 描述中说明无需文档更新的理由，并添加 'skip-doc-check' 标签"
+            echo ""
+            exit 1
+          fi
+
+          echo "✅ 文档门禁通过"
+
+      - name: Check ADR for architecture changes
+        if: steps.pr-type.outputs.type == 'normal'
+        run: |
+          set -euo pipefail
+
+          BASE_REF="origin/${{ gitea.event.pull_request.base.ref }}"
+
+          # 检测是否涉及架构级变更
+          ARCH_PATTERNS="cmd/|internal/.*handler|internal/.*service|api/|proto|deployments/"
+          ARCH_CHANGED=$(git diff --name-only "$BASE_REF" HEAD | grep -E "$ARCH_PATTERNS" || true)
+
+          if [ -n "$ARCH_CHANGED" ]; then
+            ADR_CHANGED=$(git diff --name-only "$BASE_REF" HEAD -- 'docs/adr/' | wc -l)
+            if [ "$ADR_CHANGED" -eq 0 ]; then
+              echo ""
+              echo "========================================="
+              echo "⚠️  建议新增 ADR"
+              echo "========================================="
+              echo ""
+              echo "本 PR 涉及架构级文件变更："
+              echo "$ARCH_CHANGED"
+              echo ""
+              echo "如果这是架构决策（新增组件/改通信方式/改数据模型等），"
+              echo "请在 docs/adr/ 下新增 ADR 文件。"
+              echo "如果确认不需要 ADR（如纯 Bug 修复），可忽略此警告。"
+              echo ""
+            fi
+          fi
+
+      - name: Check for hardcoded secrets
+        run: |
+          set -euo pipefail
+          BASE_REF="origin/${{ gitea.event.pull_request.base.ref }}"
+          DIFF=$(git diff "$BASE_REF" HEAD)
+
+          if echo "$DIFF" | grep -qiE '^\+.*(password|secret|token|api_key|apikey|private_key)\s*[:=]\s*["\x27][^"\x27]{8,}'; then
+            echo "❌ 检测到可能的硬编码密钥"
+            echo "请使用环境变量或 Vault 注入。"
+            exit 1
+          fi
+
+          echo "✅ 密钥检查通过"
