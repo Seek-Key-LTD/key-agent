@@ -51,6 +51,38 @@ func main() {
 			Model:   os.Getenv("LLM_MODEL"),
 		},
 	)
+	// A2A 客户端：主动调用别的 agent (POST /atoa/call {"to":"topaz","task":"..."})
+	mux.HandleFunc("/atoa/call", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		var req struct {
+			To   string `json:"to"`
+			Task string `json:"task"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		if req.To == "" || req.Task == "" {
+			http.Error(w, `{"error":"to and task required"}`, http.StatusBadRequest)
+			return
+		}
+		client, err := atoa.NewClientFromEnv()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		reply, err := client.SendMessage(r.Context(), req.To, req.Task)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadGateway)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]string{"from": client.From, "to": req.To, "reply": reply})
+	})
+
 	mux.HandleFunc("/webhook/gitea", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
