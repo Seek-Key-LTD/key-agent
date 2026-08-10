@@ -58,33 +58,38 @@ func (r *ConsulRegistry) Endpoint(ctx context.Context, agentName string) (string
 		return "", fmt.Errorf("consul: agent %s has no node", agentName)
 	}
 
-	// 2. catalog API 拿节点 IP（不依赖 Consul DNS 配置）
-	catURL := fmt.Sprintf("%s/v1/catalog/node/%s", r.ConsulAddr, entry.Node)
-	catReq, err := http.NewRequestWithContext(ctx, "GET", catURL, nil)
-	if err != nil {
-		return "", err
+	// 2. catalog API 跨 DC 拿节点 IP（dc1=Area 0 权威，遍历 dc1/dc2/dc3）
+	//    不依赖 Consul DNS；节点可能分布在任意 DC，逐个 DC 查 catalog。
+	dcs := []string{"dc1", "dc2", "dc3"}
+	var nodeAddr string
+	for _, dc := range dcs {
+		catURL := fmt.Sprintf("%s/v1/catalog/node/%s?dc=%s", r.ConsulAddr, entry.Node, dc)
+		catReq, err := http.NewRequestWithContext(ctx, "GET", catURL, nil)
+		if err != nil {
+			continue
+		}
+		catResp, err := client.Do(catReq)
+		if err != nil {
+			continue
+		}
+		var cat struct {
+			Node struct {
+				Address string `json:"Address"`
+			} `json:"Node"`
+		}
+		decErr := json.NewDecoder(catResp.Body).Decode(&cat)
+		catResp.Body.Close()
+		if decErr != nil || cat.Node.Address == "" {
+			continue
+		}
+		nodeAddr = cat.Node.Address
+		break
 	}
-	catResp, err := client.Do(catReq)
-	if err != nil {
-		return "", fmt.Errorf("consul: resolve node %s: %w", entry.Node, err)
-	}
-	defer catResp.Body.Close()
-	if catResp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("consul: node %s not found (status %d)", entry.Node, catResp.StatusCode)
-	}
-	var cat struct {
-		Node struct {
-			Address string `json:"Address"`
-		} `json:"Node"`
-	}
-	if err := json.NewDecoder(catResp.Body).Decode(&cat); err != nil {
-		return "", fmt.Errorf("consul: decode node %s: %w", entry.Node, err)
-	}
-	if cat.Node.Address == "" {
-		return "", fmt.Errorf("consul: node %s has no address", entry.Node)
+	if nodeAddr == "" {
+		return "", fmt.Errorf("consul: node %s not found in any DC (%v)", entry.Node, dcs)
 	}
 
-	return fmt.Sprintf("http://%s:18790/a2a", cat.Node.Address), nil
+	return fmt.Sprintf("http://%s:18790/a2a", nodeAddr), nil
 }
 
 // Client 封装 A2A 远程调用。
