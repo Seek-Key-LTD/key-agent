@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"os"
 	"time"
 
@@ -82,11 +83,15 @@ func (r *ConsulRegistry) Endpoint(ctx context.Context, agentName string) (string
 		if decErr != nil || cat.Node.Address == "" {
 			continue
 		}
+		// A2A 底线: 必须走 Tailscale (100.x), 私网/公网地址一律拒绝
+		if !strings.HasPrefix(cat.Node.Address, "100.") {
+			continue
+		}
 		nodeAddr = cat.Node.Address
 		break
 	}
 	if nodeAddr == "" {
-		return "", fmt.Errorf("consul: node %s not found in any DC (%v)", entry.Node, dcs)
+		return "", fmt.Errorf("consul: node %s not reachable via Tailscale in any DC (%v)", entry.Node, dcs)
 	}
 
 	return fmt.Sprintf("http://%s:18790/a2a", nodeAddr), nil
