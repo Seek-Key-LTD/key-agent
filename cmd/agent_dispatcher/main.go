@@ -12,6 +12,8 @@ import (
 	"os"
 
 	"google.golang.org/adk/v2/integration"
+
+	"google.golang.org/adk/v2/internal/atoa"
 )
 
 func main() {
@@ -38,6 +40,17 @@ func main() {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("ok"))
 	})
+	atoa.Mount(mux,
+		os.Getenv("AGENT_NAME"),
+		os.Getenv("AGENT_DESCRIPTION"),
+		os.Getenv("AGENT_ADDR"),
+		"https://authentik.capitaltrain.cn/application/o/userinfo/",
+		atoa.LLMConfig{
+			BaseURL: os.Getenv("LLM_BASE_URL"),
+			APIKey:  os.Getenv("LLM_API_KEY"),
+			Model:   os.Getenv("LLM_MODEL"),
+		},
+	)
 	mux.HandleFunc("/webhook/gitea", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
