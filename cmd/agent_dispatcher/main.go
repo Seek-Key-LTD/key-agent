@@ -34,6 +34,10 @@ func main() {
 
 	dispatcher := integration.NewDispatcherService(authentikURL, vaultAddr)
 
+	// 读取 ASN 自定义名片字段（soul_name/evm_address/constellation/coherence）
+	agentName := os.Getenv("AGENT_NAME")
+	soulName, evmAddr, constellation, coherence := atoa.LoadASNCardFields(vaultAddr, agentName)
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/plain")
@@ -41,7 +45,7 @@ func main() {
 		w.Write([]byte("ok"))
 	})
 	atoa.Mount(mux,
-		os.Getenv("AGENT_NAME"),
+		agentName,
 		os.Getenv("AGENT_DESCRIPTION"),
 		os.Getenv("AGENT_ADDR"),
 		"https://authentik.capitaltrain.cn/application/o/userinfo/",
@@ -50,6 +54,7 @@ func main() {
 			APIKey:  os.Getenv("LLM_API_KEY"),
 			Model:   os.Getenv("LLM_MODEL"),
 		},
+		soulName, evmAddr, constellation, coherence,
 	)
 	// A2A 客户端：主动调用别的 agent (POST /atoa/call {"to":"topaz","task":"..."})
 	mux.HandleFunc("/atoa/call", func(w http.ResponseWriter, r *http.Request) {
