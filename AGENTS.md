@@ -96,6 +96,10 @@ ASN 要对抗
 4. **镜像里不含任何 harness 配置**——没有可继承的东西
 5. **二进制只从 OCA S3 / CF Worker 拉，SHA 校验**，不许自己 build 后分发
 6. **出网白名单**：只准连 LiteLLM / GBrain / Authentik
+7. **每个节点在调度器里必须带完整的 agent card 标签**——身份 / 模型 / **合规（含 `topic_admission`）** / 运行状态四类。**缺 `topic_admission` 等于"什么都聊"，最危险。**
+
+> **第 7 条的完整定义见 [`docs/NOMAD-LABELS.md`](docs/NOMAD-LABELS.md)。**
+> 核心一句话：**邀请别人上茶台桌前，你得先知道别人方不方便聊这个事情。** 这不是审查，是知情同意——而且它恰好也是工程上正确的做法（不问就派 → 对方被警告 → 掉线 → 可用性下降）。
 
 ### 3.2 为什么 `$HOME` 是那个关键点
 
@@ -177,7 +181,20 @@ git diff --name-only origin/main...HEAD | grep -E '^(memory|session|messaging|ev
 shasum -a 256 dist/k-agent-* | awk '{print $1}' | sort -u | wc -l   # 期望 1
 ```
 
-### 5.5 交付前必跑（上游 ADK-Go 的定义）
+### 5.5 标签齐全吗
+
+```bash
+# 期望：每个节点都有 topic_admission（缺了等于"什么都聊"）
+nomad node status -verbose | grep -c 'topic_admission'
+
+# 期望：拒答被单独计数，没有混进 error
+grep -c 'REFUSED' logs/agent.log
+```
+
+> **拒答不是错误。** 见 [`docs/NOMAD-LABELS.md`](docs/NOMAD-LABELS.md) §3.3：
+> **① 不方便聊（拒答）② 聊了但证据不足（降档）③ 聊错了（与账不符）——前两种是位置/条件问题，第三种是人的问题，处理方式完全相反。**
+
+### 5.6 交付前必跑（上游 ADK-Go 的定义）
 
 ```bash
 test -f go.work || go work init
