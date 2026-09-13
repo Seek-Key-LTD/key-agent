@@ -6,8 +6,8 @@ We'd love to accept your patches and contributions to this project.
 -   [Branches](#branches)
 -   [Multi-Module Development](#multi-module-development)
 -   [Before you begin](#before-you-begin)
-    -   [Sign our Contributor License Agreement](#sign-our-contributor-license-agreement)
-    -   [Review our community guidelines](#review-our-community-guidelines)
+    -   [贡献许可](#贡献许可)
+    -   [社区准则](#社区准则)
     -   [Code reviews](#code-reviews)
 -   [Contribution workflow](#contribution-workflow)
     -   [Finding Issues to Work On](#finding-issues-to-work-on)
@@ -71,29 +71,27 @@ git switch -c my-fix origin/v1
 
 ## Before you begin
 
-### Sign our Contributor License Agreement
+### 贡献许可
 
-All submissions to this project need to follow Google’s [Contributor
-License Agreement (CLA)](https://cla.developers.google.com/about), which
-covers any original work of authorship included in the submission. This
-doesn't prohibit the use of coding assistance tools, including tool-,
-AI-, or machine-generated code, as long as these submissions abide by the
-CLA's requirements.
+本仓库是 [google/adk-go](https://github.com/google/adk-go) 的 fork，整体遵循 **Apache License 2.0**（见 `LICENSE`）。
 
-You (or your employer) retain the copyright to your contribution; this simply
-gives us permission to use and redistribute your contributions as part of the
-project.
+- **上游代码**：保留 Google 的原始版权与许可声明（`LICENSE` 与各文件头的 license header）。**不要删除或改动。**
+- **你的贡献**：以 **Apache License 2.0** 授权（inbound = outbound）。提交 PR 即表示你同意以此许可发布你的贡献，并确认你有权这样做。你（或你的雇主）保留自己贡献的版权。
+- **AI 辅助生成**：允许使用 AI 编码工具，但**提交者对所提交内容的正确性与权利状态负责**。
+- **署名**：本仓库遵循**全员花名制**——贡献者以花名 / 昵称 / 角色名署名，**不需要也不应提供真实姓名或真实机构**。
 
-If you or your current employer have already signed the Google CLA (even if it
-was for a different project), you probably don't need to do it again.
+> 若后续需要引入独立的贡献者协议（CLA），会在本文件更新。当前不存在 Google CLA 或其他第三方 CLA 的要求。
 
-Visit <https://cla.developers.google.com/> to see your current agreements or to
-sign a new one.
+### 社区准则
 
-### Review our community guidelines
+**先读 [`AGENTS.md`](AGENTS.md) 的第 0–5 节**——那是本仓库自己的节点纪律（为什么必须隔离、能力只准走哪四道门、五道红线、怎么自检）。
 
-This project follows
-[Google's Open Source Community Guidelines](https://opensource.google/conduct/).
+在此基础上：
+
+- **不引战**：本仓库是技术仓库。议题讨论聚焦在"这个加法是否破坏同核 / 异挂"，不讨论立场。
+- **不消费真人**：不提交真实姓名、真实机构、私人联系方式。
+- **不提交凭证**：密钥一律走 Infisical / Vault 注入。**凭证一旦进 git 历史就永久存在。**
+- **一次一件事**：一个 PR 只解决一个关注点。
 
 ### Code reviews
 
