@@ -1,0 +1,33 @@
+docker_host = "unix:///var/run/docker.sock"
+data_root   = "/opt/asn-data"
+admin_email = "admin@example.com"
+
+# Shared Storage & DBs
+redis_host         = "127.0.0.1"
+redis_port         = 6379
+postgres_host      = "127.0.0.1"
+postgres_port      = 5432
+postgres_user      = "postgres"
+postgres_password  = "your_secure_pg_password"
+elasticsearch_host = "127.0.0.1"
+elasticsearch_port = 9200
+
+# Overleaf (MongoDB Atlas or Local)
+enable_overleaf    = true
+overleaf_mongo_url = "mongodb+srv://user:pass@cluster0.mongodb.net/overleaf?retryWrites=true&w=majority"
+overleaf_port      = 8080
+
+# Drupal 11
+enable_drupal        = true
+drupal_db_password   = "your_secure_drupal_pass"
+drupal_port          = 8081
+
+# Mastodon
+enable_mastodon          = true
+mastodon_domain          = "social.example.com"
+mastodon_secret_key_base = "generate_64_byte_random_string_here"
+mastodon_otp_secret      = "generate_64_byte_random_string_here"
+mastodon_web_port        = 3000
+
+# RSS
+enable_rss_pipeline = true
