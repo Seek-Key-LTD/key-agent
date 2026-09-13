@@ -9,8 +9,19 @@ import time
 import requests
 import oracledb
 
-VAULT_URL = "http://192.168.31.111:8200/v1/secret/data/oracle/config/lake5"
-VAULT_TOKEN = "hvs.REDACTED_FOR_SECURITY_000"
+# ⚠️ 内网地址与凭据一律由环境提供，禁止硬编码。
+# 本仓库是公开仓库，硬编码 Vault 凭据 / 内网 IP 等同于公开泄露。
+# 2026-09-13：此处曾硬编码 Vault 服务令牌与内网地址，已全部移除。
+VAULT_ADDR = os.environ.get("VAULT_ADDR", "")
+VAULT_PATH = os.environ.get("VAULT_PATH", "secret/data/oracle/config/lake5")
+VAULT_URL = f"{VAULT_ADDR}/v1/{VAULT_PATH}"
+VAULT_TOKEN = os.environ.get("VAULT_TOKEN", "")
+
+if not VAULT_ADDR or not VAULT_TOKEN:
+    sys.exit(
+        "❌ 缺少 VAULT_ADDR 或 VAULT_TOKEN 环境变量。\n"
+        "   凭据禁止硬编码（本仓为公开仓库），请通过环境注入。"
+    )
 
 def main():
     print("==================================================================")
@@ -34,13 +45,17 @@ def main():
     print(f"  Vault Service Name: {service_name}")
 
     # 2. Connect to Oracle Autonomous Database 26ai (Lake 5) via HAProxy SSL Bridge
-    print("\n--- 2. Connecting to Oracle ADB 26ai (Lake 5) via HAProxy (100.93.5.81:11523) ---")
+    haproxy_host = os.environ.get("HAPROXY_HOST", "")
+    haproxy_port = int(os.environ.get("HAPROXY_PORT", "11523"))
+    if not haproxy_host:
+        sys.exit("❌ 缺少 HAPROXY_HOST 环境变量（内网地址禁止硬编码）。")
+    print(f"\n--- 2. Connecting to Oracle ADB 26ai (Lake 5) via HAProxy ({haproxy_host}:{haproxy_port}) ---")
     try:
         connection = oracledb.connect(
             user=username,
             password=password,
-            host="100.93.5.81",
-            port=11523,
+            host=haproxy_host,
+            port=haproxy_port,
             service_name=service_name
         )
         cursor = connection.cursor()

@@ -101,10 +101,28 @@ jobs:
           BASE_REF="origin/${{ gitea.event.pull_request.base.ref }}"
           DIFF=$(git diff "$BASE_REF" HEAD)
 
+          # 1. 通用密钥赋值
           if echo "$DIFF" | grep -qiE '^\+.*(password|secret|token|api_key|apikey|private_key)\s*[:=]\s*["\x27][^"\x27]{8,}'; then
-            echo "❌ 检测到可能的硬编码密钥"
+            echo "❌ 检测到可能的硬编码密钥（键值赋值）"
             echo "请使用环境变量或 Vault 注入。"
             exit 1
           fi
 
-          echo "✅ 密钥检查通过"
+          # 2. 已知令牌前缀
+          #    Vault hvs./hvb./hvr. · GitHub ghp_/gho_ · Notion ntn_
+          #    OpenAI sk- · Gemini AIza · Cloudflare HYT-
+          if echo "$DIFF" | grep -qE '^\+.*(hvs\.|hvb\.|hvr\.|ghp_[A-Za-z0-9]|gho_[A-Za-z0-9]|ntn_[A-Za-z0-9]|sk-[A-Za-z0-9]{16,}|AIza[A-Za-z0-9_-]{30,}|HYT-)'; then
+            echo "❌ 检测到已知令牌前缀"
+            echo "请吊销该令牌，改用环境变量注入。"
+            exit 1
+          fi
+
+          # 3. 内网地址（RFC1918 + Tailscale CGNAT 100.64/10）
+          #    本仓为公开仓库，真实内网出口不得入库。
+          if echo "$DIFF" | grep -qE '^\+.*(192\.168\.[0-9]+\.[0-9]+|10\.[0-9]+\.[0-9]+\.[0-9]+|172\.(1[6-9]|2[0-9]|3[01])\.[0-9]+\.[0-9]+|100\.(6[4-9]|[7-9][0-9]|1[01][0-9]|12[0-7])\.[0-9]+\.[0-9]+)'; then
+            echo "❌ 检测到内网地址（RFC1918 / Tailscale CGNAT）"
+            echo "本仓为公开仓库，请改用环境变量注入。"
+            exit 1
+          fi
+
+          echo "✅ 密钥与内网地址检查通过"
