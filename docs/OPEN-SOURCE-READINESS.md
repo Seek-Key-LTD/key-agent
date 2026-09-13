@@ -1,7 +1,8 @@
 # 开源就绪评估 —— 改名、模块路径与推送阻塞
 
 > **日期**：2026-09-13
-> **结论摘要**：仓库改名已完成；**推送 GitHub 被阻塞**（历史含存活 Vault 令牌）。
+> **结论摘要**：仓库改名已完成；推送 GitHub 被 **Push Protection** 拦截
+> （历史含 Vault 令牌）。主理人评估为网络隔离下可接受，待解除拦截。
 
 ---
 
@@ -54,8 +55,11 @@ README 已声明「**上游同步保持兼容**」，说明上游合并是要保
 
 ```
 cmd/test_oracle_lake5_memory/test_oracle_26ai.py:13
-VAULT_TOKEN = "hvs.REDACTED_FOR_SECURITY_000"
+VAULT_TOKEN = "hvs.<已打码>"        # 前缀 hvs. = HashiCorp Vault 服务令牌
 ```
+
+> ⚠️ **本文档此前的版本把令牌原文抄了进来**，等于自己造了第二个泄露点
+> （GitHub 推送保护一并报出）。**写审计文档时只写前缀，不写原文。**
 
 - `hvs.` = HashiCorp Vault 服务令牌前缀
 - 该令牌读取 `secret/data/oracle/config/lake5`，**其中存放 Oracle ADB 的账号与密码**
@@ -76,19 +80,51 @@ VAULT_TOKEN = "hvs.REDACTED_FOR_SECURITY_000"
 
    两条新规则已本地自测命中。
 
-### 2.3 为什么还不能推
+### 2.3 推送结果：GitHub 推送保护拦截
 
-**工作区修复不改变历史。** 该令牌仍在待推的 67 个提交里。
-
-**正确顺序**（与「剥离 ≠ 吊销」同一纪律）：
+实测推送被 GitHub **Push Protection** 拒绝：
 
 ```
-1. 先在 Vault 侧吊销该令牌          ← 用户操作，需 Vault 访问权
-2. 再决定：直接推送（历史里是死令牌） 或 先改史再推
+remote: error: GH013: Repository rule violations found for refs/heads/main.
+remote: - GITHUB PUSH PROTECTION
+remote:   —— HashiCorp Vault Root Service Token ——
+remote:    locations:
+remote:      - commit: 1e879cf…  cmd/test_oracle_lake5_memory/test_oracle_26ai.py:13
+remote:      - commit: 8b1bea2…  docs/OPEN-SOURCE-READINESS.md:57
 ```
 
-> **推荐**：吊销后直接推送即可——历史里的令牌已失效，
-> 改史（force-push）的代价大于收益。
+> **第二处是本文档自己造成的**：本文此前把令牌原文抄了进来。
+> **已修正。教训：写审计文档时只写前缀，不写原文。**
+
+GitHub 将其识别为 **Root Service Token**（比普通 service token 更高权限）。
+
+### 2.4 主理人判断：网络隔离下可接受
+
+主理人评估：**该 Vault 在 Tailscale 网络内，外部知道也无法连接**，故无需吊销。
+
+**实测证据（支持该判断）**：
+
+| 检查 | 结果 |
+|---|---|
+| 本机 tailnet 状态 | 在网（`100.86.9.29 mini`） |
+| `authentik/gitea/matrix/litellm.capitaltrain.cn` 解析 | **全部 → `100.93.5.81`**（同一个 Tailscale IP） |
+| 该地址所属网段 | **`100.64.0.0/10`（RFC 6598 CGNAT）——公网不可路由** |
+| 67 个提交中的**云侧凭据**（GitHub/Cloudflare/Notion/OpenAI/Gemini 前缀） | **零** |
+
+> **关键区分**：网络隔离保护**内网服务**，**不保护云侧凭据**——
+> 后者从任何地方都能用。本次扫描确认待推内容里没有云侧凭据，
+> 所以隔离判断成立。
+
+### 2.5 两条路
+
+| 方案 | 做法 | 说明 |
+|---|---|---|
+| **A. 解除拦截**（符合主理人判断） | 点 GitHub 报错里给的 unblock 链接 | 一次性放行，记录在安全日志；令牌留在历史里 |
+| **B. 改史清除** | `git filter-repo` 清掉该文件的历史 | force-push；历史干净，但协作方需重 clone |
+
+> 若将来该 Vault 出现**任何公网暴露**（新 ingress / 端口转发 / 临时调试暴露），
+> 已公开的令牌即刻可用。这是**条件性安全**，不是错误——
+> 但要意识到条件是什么。
 
 ---
 
@@ -118,12 +154,13 @@ VAULT_TOKEN = "hvs.REDACTED_FOR_SECURITY_000"
 
 ## 四、待办清单
 
-- [ ] **P0** 吊销 Vault 令牌 `hvs.85pE…`（Vault 侧，需人工）
-- [ ] **P0** 吊销后推送 GitHub，或决定改史
+- [ ] **P0** 决定推送路径：**A. 点 unblock 链接放行**（符合主理人网络隔离判断）
+      或 **B. 改史清除**。见 §2.5
 - [ ] P1 把 `cmd/agent_dispatcher` 与 `integration/dispatcher.go` 的内网地址
-      迁到环境变量（需部署配合）
-- [ ] P2 移出 `dist/` 下的二进制产物
+      迁到环境变量（需部署配合，会改变运行中服务的行为）
+- [ ] P2 移出 `dist/` 下的二进制产物（36MB）
 - [ ] P2 确认 `dist/`、`*.log`、`.env*` 已在 `.gitignore`
+- [ ] P3 建议开启 GitHub **Secret Scanning**（该仓已具备资格）
 
 ---
 
