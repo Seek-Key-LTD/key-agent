@@ -1,192 +1,24 @@
-# How to contribute
+# Key Agent 社区贡献与审核员守则
 
-We'd love to accept your patches and contributions to this project.
+欢迎加入 **Key Agent**（面向因陀罗网络 ASN 与去中心化认知联合体的高性能单进程 Agent 运行时）！
 
--   [How to contribute](#how-to-contribute)
--   [Branches](#branches)
--   [Multi-Module Development](#multi-module-development)
--   [Before you begin](#before-you-begin)
-    -   [贡献许可](#贡献许可)
-    -   [社区准则](#社区准则)
-    -   [Code reviews](#code-reviews)
--   [Contribution workflow](#contribution-workflow)
-    -   [Finding Issues to Work On](#finding-issues-to-work-on)
-    -   [Requirement for PRs](#requirement-for-prs)
-    -   [Large or Complex Changes](#large-or-complex-changes)
-    -   [Testing Requirements](#testing-requirements)
-    -   [Unit Tests](#unit-tests)
-    -   [Manual End-to-End (E2E) Tests](#manual-end-to-end-e2e-tests)
-    -   [Documentation](#documentation)
-    -   [Alignment with adk-python](#alignment-with-adk-python)
+---
 
-## Branches
+## 核心开发与评审原则
 
-ADK Go uses two long-lived branches:
+1. **单进程高内聚（Single-Process High Cohesion）**：
+   - 保持运行时轻量、确定性与跨跨 DC 穿透能力；
+   - 尽量减少不必要的外部重型 SDK 侵入，优先使用纯 Go 实现。
+2. **零凭据暴露与零付费账单（Zero Secrets & Zero Billing）**：
+   - 任何涉及 Vault、Authentik、EVM 私钥的测试必须使用 Mock 或环境变量注入，严禁硬编码；
+   - 社区协作遵循自带干粮原则，不消耗组织账户的付费额度。
+3. **肯定性立论与测试覆盖（Test Driven & Affirmative）**：
+   - 提交新特性或修复时，必须附带完整的 `_test.go` 单元测试并通过 CI 验证。
 
--   **`main`** — the actively developed 2.x line. This is the default branch and
-    the base for new pull requests.
--   **`v1`** — the maintenance branch for the 1.x line. Target this branch only
-    for fixes that need to ship to 1.x.
+---
 
-The `v1` branch is a snapshot of the 1.x line, branched from `main` before the
-2.0 work landed. `main` then continued forward as the 2.x line (the 2.0 release
-was merged into it), so its history is unbroken — old clones fast-forward
-cleanly. There is no need to re-sync or rename anything locally:
+## 审核员（Reviewer）核验清单
 
-```bash
-git switch main
-git pull            # fast-forwards onto the 2.x line
-```
-
-To work on a 1.x fix, base your branch on `v1`:
-
-```bash
-git switch -c my-fix origin/v1
-```
-
-## Multi-Module Development
-
-**Policy**: New integrations with heavy or optional dependencies must be created as separate Go modules.
-
-**Local Development**: Contributors should use `go work init && go work use -r .` to set up their local workspaces.
-
-**Steps to Add a New Module (e.g., `plugin/myplugin`)**:
-1. Navigate into the directory: `cd <module_directory_path>`
-2. Initialize the module: `go mod init google.golang.org/adk/<module_directory_path>`
-3. Add your Go code, dependencies, and tests.
-4. Tidy the module: `go mod tidy`
-5. Return to the repo root.
-6. Tidy the root module: `go mod tidy`
-7. Add the module to your workspace: `go work use ./<module_directory_path>`
-8. Verify everything builds and tests from the root: `go build work && go test work`. The CI will automatically pick up the new module on the PR.
-
-**Release Tagging**:
-- **Core Module**: Tags remain `vX.Y.Z` (e.g., `v2.1.0`).
-- **Submodules**: Tags are prefixed with the full module path directory, e.g., `plugin/agentanalytics/v0.1.0`. This is the standard Go way to version modules not at the repo root.
-- **go get / go install**: Consumers will use:
-  - `go get google.golang.org/adk/v2@v2.1.0`
-  - `go get google.golang.org/adk/plugin/agentanalytics@v0.1.0`
-- **Version Coupling**: Each submodule's `go.mod` will specify the minimum version of `google.golang.org/adk/v2` it depends on. Submodules can be released independently of the core module and each other.
-- **go.work Impact**: `go.work` is for local development only and does not affect how modules are versioned, tagged, or fetched by consumers.
-
-## Before you begin
-
-### 贡献许可
-
-本仓库是 [google/adk-go](https://github.com/google/adk-go) 的 fork，整体遵循 **Apache License 2.0**（见 `LICENSE`）。
-
-- **上游代码**：保留 Google 的原始版权与许可声明（`LICENSE` 与各文件头的 license header）。**不要删除或改动。**
-- **你的贡献**：以 **Apache License 2.0** 授权（inbound = outbound）。提交 PR 即表示你同意以此许可发布你的贡献，并确认你有权这样做。你（或你的雇主）保留自己贡献的版权。
-- **AI 辅助生成**：允许使用 AI 编码工具，但**提交者对所提交内容的正确性与权利状态负责**。
-- **署名**：本仓库遵循**全员花名制**——贡献者以花名 / 昵称 / 角色名署名，**不需要也不应提供真实姓名或真实机构**。
-
-> 若后续需要引入独立的贡献者协议（CLA），会在本文件更新。当前不存在 Google CLA 或其他第三方 CLA 的要求。
-
-### 社区准则
-
-**先读 [`AGENTS.md`](AGENTS.md) 的第 0–5 节**——那是本仓库自己的节点纪律（为什么必须隔离、能力只准走哪四道门、五道红线、怎么自检）。
-
-在此基础上：
-
-- **不引战**：本仓库是技术仓库。议题讨论聚焦在"这个加法是否破坏同核 / 异挂"，不讨论立场。
-- **不消费真人**：不提交真实姓名、真实机构、私人联系方式。
-- **不提交凭证**：密钥一律走 Infisical / Vault 注入。**凭证一旦进 git 历史就永久存在。**
-- **一次一件事**：一个 PR 只解决一个关注点。
-
-### Code reviews
-
-All submissions, including submissions by project members, require review. We
-use GitHub pull requests for this purpose. Consult
-[GitHub Help](https://help.github.com/articles/about-pull-requests/) for more
-information on using pull requests.
-
-## Contribution workflow
-
-### Finding Issues to Work On
-
--   Browse issues labeled **`good first issue`** (newcomer-friendly) or **`help
-    wanted`** (general contributions).
--   For other issues, please kindly ask before contributing to avoid
-    duplication.
-
-### Requirement for PRs
-
--   Code must follow [Google Go Style Guide](https://google.github.io/styleguide/go/index).
--   All PRs, other than small documentation or typo fixes, should have an Issue
-    associated. If a relevant issue doesn't exist, please create one first or
-    you may instead describe the bug or feature directly within the PR
-    description, following the structure of our issue templates.
--   Small, focused PRs. Keep changes minimal—one concern per PR.
--   For bug fixes or features, please provide logs or screenshots after the fix
-    is applied to help reviewers better understand the fix.
--   Please include a `testing plan` section in your PR to talk about how you
-    will test. This will save time for PR review. See `Testing Requirements`
-    section for more details.
-
-### Large or Complex Changes
-
-For substantial features or architectural revisions:
-
--   Open an Issue First: Outline your proposal, including design considerations
-    and impact.
--   Gather Feedback: Discuss with maintainers and the community to ensure
-    alignment and avoid duplicate work.
-
-### Testing Requirements
-
-To maintain code quality and prevent regressions, all code changes must include
-comprehensive tests and verifiable end-to-end (E2E) evidence.
-
-#### Unit Tests
-
-Please add or update unit tests for your change.
-
-Requirements for unit tests:
-
--   Cover new features, edge cases, error conditions, and typical
-    use cases.
--   Fast and isolated.
--   Written clearly with descriptive names.
--   Free of external dependencies (use mocks or fixtures as needed).
--   Aim for high readability and maintainability; include comments for complex
-    scenarios.
-
-#### Manual End-to-End (E2E) Tests
-
-Manual E2E tests ensure integrated flows work as intended. Your tests should
-cover all scenarios. Sometimes, it's also good to ensure relevant functionality
-is not impacted.
-
-Depending on your change:
-
--   **ADK Web:**
-
-    -   Capture and attach relevant screenshots demonstrating the UI/UX changes
-        or outputs.
-    -   Label screenshots clearly in your PR description.
-
--   **Runner:**
-
-    -   Provide testing setup. For example, the agent definition, and the
-        runner setup.
-    -   Include the command used and console output showing test results.
-    -   Highlight sections of the log that directly relate to your change.
-
-# ADK Web
-
-## Updating ADK web version to latest
-
--   Run `./scripts/adk-web/update-adk-web.sh` to update the web UI to the latest version from [GitHub](https://github.com/google/adk-web).
--   Run `docker run -it adk-web-builder:latest sh -c "<COMMAND>"` to start the container and debug the build, e.g.:
-    -   `docker run -it adk-web-builder:latest sh -c "ls -alh dist/agent_framework_web/browser"` to view the built files.
-    -   `docker run -it adk-web-builder:latest sh -c "npm run build"` to debug the build output.
-
-### Documentation
-
-For any changes that impact user-facing documentation (guides, API reference,
-tutorials), please open a PR in the
-[adk-docs](https://github.com/google/adk-docs) repository to update the relevant
-parts before or alongside your code PR.
-
-### Alignment with adk-python
-We lean on [adk-python](https://github.com/google/adk-python) for being the source of truth and one should refer to adk-python for validation.
+- [ ] **Go 编译与测试**：`go test ./...` 必须全部通过，无竞态条件警告（`-race`）。
+- [ ] **安全审计**：无硬编码的 IP、私钥、Token 原文。
+- [ ] **IaC 声明规范**：Docker / Nomad / Authentik 模板遵循最小权限原则。
