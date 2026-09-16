@@ -43,6 +43,33 @@ type PicoConfigFile struct {
 	} `json:"oracle"`
 }
 
+var defaultMastodonTokens = map[string]string{
+	"ruby":       "6CFHqylY1Zt9FMfWo2c5BB8yyShpiDtODJ4NTOZob8U",
+	"luna":       "jDBZ4I2Z_rwfNmQYL4GD22YCL0g3zT1JUwCpWJ_k5h4",
+	"azure":      "S2ret7C2v0U879OKW2XtIAiWJ63rO7y2r7zvQSNCUNg",
+	"amber":      "m_e9p0dpuIV85FhE14C6OcS98HOtldK1L4sMcTUNqFo",
+	"argentite":  "tbk2tR24AyLEtx4lFCpfY7y9XZ5zINHihmdXlcglswQ",
+	"obsidian":   "mastodon_obsidian_23eabcde4b5e32fb7e0b57643689e301",
+	"jasper":     "zK3vkS6ITz4jEVBDhxOxnfzpIbNFmn1BKIGCEftcSZA",
+	"violet":     "mastodon_violet_7b421ae7fb8acbd4359b7fdffbbafab9",
+	"emerald":    "zb674i6ulx39RSLb2ksN5OZ-jGB_F1e7b2lcBJdMH98",
+	"moli":       "9YZnH_uS-oqIJuihCM8uDFFlVWAgUZuzXovHHiPAaGM",
+	"muxu":       "FpKHoCavtyGDu-Xs7fb_0PuMAF3T3yKbwbNN38g1xg0",
+	"zhuyu":      "mastodon_zhuyu_5aab9fdf1aabb6fc2732f504cf1df010",
+	"tumi":       "H56OhzdQUxOCWGBFVUl2yCzxiGBcQgGF7rEdjjDmnoE",
+	"meigui":     "NGNg_zFqrxPkdt1EChQWb_ptG6efS_E5rMLVyYtKqaQ",
+	"qiangwei":   "3nVZburNQcUXld0ERsiGWhOofVejG7PojI3-Z5sb4vw",
+	"agate":      "X1NKwM8iNZV2g7eZOhRubkHMbsToDu_MKaMFw1jL1mA",
+	"carbonado":  "8bGUEEnZUVBlH6jXvhftKgucJIK4riyhuQTK0ZuuvsU",
+	"quartz":     "IrzU7axgLLKHfg558rryKfKn1yJd6hhiVJI12rdYlpo",
+	"diamond":    "uNJx-fr5okhKtua3NYNy8NLQC81X-9ZYJb_EZFmKhAs",
+	"faluo":      "DO_nxGwvn-aUzfAKjgBP-TsJvOkni1KjWNM4opPgNho",
+	"topaz":      "7KueFPRqtVgCnOEg3BoWBgzcxgy4W2H88K2vJflMaoU",
+	"leopard":    "ddfVXKgvB_DoV_m8YX8LVTzmNbgHauEQccX7P73o3NY",
+	"onyx":       "58YVi1Pc6mJG6ZxElh21MvgnYYGIZZACb3jspve0BYA",
+	"iron":       "mastodon_iron_88232541490b4909d062b225cdb2ee8f",
+}
+
 func loadPicoConfig(path string) *PicoConfigFile {
 	if path == "" {
 		if envPath := os.Getenv("PICO_CONFIG"); envPath != "" {
@@ -107,15 +134,18 @@ func main() {
 		vaultAddr = "https://vault.capitaltrain.cn"
 	}
 
-	// Resolve agent identity
-	agentName := os.Getenv("AGENT_NAME")
-	if agentName == "" && picoCfg != nil {
+	// Resolve agent identity (stone name from config takes priority over generic hostname/NODE_NAME)
+	agentName := ""
+	if picoCfg != nil {
 		if picoCfg.Oracle.AgentID != "" {
 			agentName = picoCfg.Oracle.AgentID
 		} else if picoCfg.Channels.Matrix.UserID != "" {
 			parts := strings.Split(picoCfg.Channels.Matrix.UserID, ":")
 			agentName = strings.TrimPrefix(parts[0], "@")
 		}
+	}
+	if agentName == "" {
+		agentName = os.Getenv("AGENT_NAME")
 	}
 	if agentName == "" {
 		agentName = os.Getenv("NODE_NAME")
@@ -201,6 +231,12 @@ func main() {
 			b, _ := io.ReadAll(resp.Body)
 			resp.Body.Close()
 			mastodonToken = strings.TrimSpace(string(b))
+		}
+	}
+	if mastodonToken == "" && agentName != "" {
+		// Fallback to embedded stone token map
+		if tok, ok := defaultMastodonTokens[agentName]; ok {
+			mastodonToken = tok
 		}
 	}
 
