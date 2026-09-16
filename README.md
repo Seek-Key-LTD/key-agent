@@ -88,6 +88,8 @@ flowchart TD
 3. **下游结构化归档 (Downstream Distribution)**：
    - 推演对抗收敛后，DSH 的 Deliverables 机制将整场判据与结论结构化打包，向 **Drupal CMS**、**Astro 前端** 以及 **Memory Bank** 发起原子写入，完成单期节目的认知沉淀。
 
+> 📖 **DSH 抵达与调用规范**：关于如何通过 Web 域名、Tailscale 内网、Headless 批处理与 ACP 管道调用 DSH，详见完整接入文档：**[docs/DSH-ACCESS.md](docs/DSH-ACCESS.md)**。
+
 ---
 
 ## 🛠️ 四、技术架构与加法纪律
@@ -132,5 +134,6 @@ export MEMORY_STORE_DSN="postgres://..."
 ## 📄 六、相关规范与索引
 
 - **[AGENTS.md](AGENTS.md)**：节点纪律、同核异挂论证与反黑箱约定（**必须先读**）。
+- **[docs/DSH-ACCESS.md](docs/DSH-ACCESS.md)**：DSH 汇聚点网络拓扑、调用接口与班子化演进规范。
 - **[CONTRIBUTING.md](CONTRIBUTING.md)**：代码贡献与 PR 流程。
 - **[docs/](docs/)**：架构演进、UAT 验收报告与角色小传规范。
