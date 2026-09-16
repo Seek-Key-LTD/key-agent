@@ -58,7 +58,8 @@
 
 | 外挂名 | 类型 | 后端 | model_id | dimension | version | 出网目标 |
 |---|---|---|---|---|---|---|
-| Matrix（mautrix-go） | L2 | Matrix homeserver | — | — | 待搬 | Matrix homeserver |
+| `messaging/matrix.go` (Matrix Sync & Pager) | L2 | Matrix Homeserver (Tuwunel) | — | — | v3 | `https://matrix.git4ta.fun` |
+| `messaging/mastodon.go` (Mastodon AP Channel) | L2 | Mastodon ActivityPub | — | — | v1/v2 | `https://mastodon.capitaltrain.cn` |
 | Gitea webhook | L2 | Gitea | — | — | — | 走 A2A task handler，不另起 HTTP |
 
 ### 身份 / 分发
