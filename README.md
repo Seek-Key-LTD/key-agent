@@ -133,6 +133,9 @@ export MEMORY_STORE_DSN="postgres://..."
 
 ## 📄 六、相关规范与索引
 
+- **[docs/CALL-TO-ACTION.md](docs/CALL-TO-ACTION.md)**：⚡ **KEY-AGENT 终极行动倡议书（时间折叠与认知金本位宣言）**。
+- **[docs/HANDCRAFTING-YOUR-FIRST-AGENT.md](docs/HANDCRAFTING-YOUR-FIRST-AGENT.md)**：👋 **双手打字以示清白：如何零魔法亲手手搓一个高纯度 ADK Go 智能体与微调度单元**。
+- **[docs/RFC-COMPOSER-SCHEDULER-WBS-ORCHESTRATION.md](docs/RFC-COMPOSER-SCHEDULER-WBS-ORCHESTRATION.md)**：🎼 **RFC: 作曲家调度器与 WBS 关键路径编排架构规范**。
 - **[AGENTS.md](AGENTS.md)**：节点纪律、同核异挂论证与反黑箱约定（**必须先读**）。
 - **[docs/DSH-ACCESS.md](docs/DSH-ACCESS.md)**：DSH 汇聚点网络拓扑、调用接口与班子化演进规范。
 - **[CONTRIBUTING.md](CONTRIBUTING.md)**：代码贡献与 PR 流程。
