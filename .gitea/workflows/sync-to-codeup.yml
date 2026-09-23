@@ -1,0 +1,27 @@
+# Managed by Terraform (seekkey/gitea-codeup-sync). Edits will be overwritten.
+name: sync-to-codeup
+on:
+  schedule:
+    # 18:30 UTC = 02:30 Beijing
+    - cron: "30 18 * * *"
+  workflow_dispatch:
+
+jobs:
+  mirror:
+    runs-on: pve
+    steps:
+      - name: mirror-push
+        env:
+          REPO: "key-agent"
+          GITEA_HOST: "gitea.capitaltrain.cn"
+          CODEUP_URL: "git@codeup.aliyun.com:698053416ec1ba182dc6e452/seekkey/key-agent.git"
+          GIT_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GIT_SSH_COMMAND: "ssh -o StrictHostKeyChecking=accept-new"
+        run: |
+          set -euo pipefail
+          WORK="/var/tmp/codeup-sync/$REPO.git"
+          rm -rf "$WORK"
+          mkdir -p /var/tmp/codeup-sync
+          git clone --quiet --mirror "https://oauth2:$GIT_TOKEN@$GITEA_HOST/seekkey/$REPO.git" "$WORK"
+          git -C "$WORK" push --mirror "$CODEUP_URL"
+          echo "mirrored $REPO -> Codeup"
