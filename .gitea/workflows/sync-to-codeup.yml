@@ -23,5 +23,6 @@ jobs:
           rm -rf "$WORK"
           mkdir -p /var/tmp/codeup-sync
           git clone --quiet --mirror "https://oauth2:$GIT_TOKEN@$GITEA_HOST/seekkey/$REPO.git" "$WORK"
-          git -C "$WORK" push --mirror "$CODEUP_URL"
+          # Codeup pre-receive rejects gitea-internal refs (refs/pull/*/head), which aborts a full --mirror push.
+          git -C "$WORK" push --force --prune "$CODEUP_URL" "refs/heads/*:refs/heads/*" "refs/tags/*:refs/tags/*"
           echo "mirrored $REPO -> Codeup"
