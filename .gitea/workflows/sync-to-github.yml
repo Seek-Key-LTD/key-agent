@@ -25,12 +25,13 @@ jobs:
           GITEA_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -uo pipefail
+          SYNC_OK=0
           WS="${GITHUB_WORKSPACE:-$PWD}"
           STATUS="$WS/ferry-status.txt"
           : > "$STATUS"
           log(){ echo "[$(date -u +%FT%TZ)] $*"; echo "[$(date -u +%FT%TZ)] $*" >> "$STATUS"; }
-          # 任何退出都把诊断推回 gitea（ferry-status 分支），即使 ssh/github 不通也能读
-          trap 'git config user.email "ferry[bot]@seekkey"; git config user.name "ferry[bot]"; git add -f ferry-status.txt; git commit -m "ferry status $(date -u +%FT%TZ)" >/dev/null 2>&1; git push origin HEAD:refs/heads/ferry-status --force >/dev/null 2>&1 || true' EXIT
+          # 仅在失败时把诊断推回 gitea（ferry-status 分支），便于排查；成功则静默
+          trap 'if [ "${SYNC_OK:-0}" != "1" ]; then git config user.email "ferry[bot]@seekkey"; git config user.name "ferry[bot]"; git add -f ferry-status.txt; git commit -m "ferry status $(date -u +%FT%TZ)" >/dev/null 2>&1; git push origin HEAD:refs/heads/ferry-status --force >/dev/null 2>&1 || true; fi' EXIT
 
           git config user.name "ferry[bot]"
           git config user.email "ferry[bot]@seekkey"
@@ -70,7 +71,7 @@ jobs:
           GH_HEAD=$(git rev-parse github/main)
           log "GITEA_HEAD=$GITEA_HEAD  GH_HEAD=$GH_HEAD"
           if [ "$GITEA_HEAD" = "$GH_HEAD" ]; then
-            log "已同步，无需摆渡"; exit 0
+            log "已同步，无需摆渡"; SYNC_OK=1; exit 0
           fi
 
           push_github() {
@@ -96,4 +97,4 @@ jobs:
             git push origin main 2>&1 | while read -r l; do log "push-origin: $l"; done
             push_github || { log "::error::push github 失败"; exit 1; }
           fi
-          log "摆渡完成"
+          log "摆渡完成"; SYNC_OK=1
