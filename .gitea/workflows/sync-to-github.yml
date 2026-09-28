@@ -1,0 +1,73 @@
+name: sync-to-github
+# 双向摆渡：在 3 号节点（ash3）runner 上运行，gitea <-> github 的 main 互为镜像。
+# 两方向都从 ash3 发起：gitea 领先就推 github；github 领先就拉回合并进 gitea；
+# 分叉则把 github 合并进 gitea 再双向推送。定时轮询 + gitea 推送即触发。
+on:
+  push:
+    branches: [ main ]
+  schedule:
+    - cron: "*/10 * * * *"     # 每 10 分钟比较一次，自动摆渡
+  workflow_dispatch:
+
+jobs:
+  ferry:
+    runs-on: ash3
+    steps:
+      - name: Checkout gitea repo (此岸)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: main
+
+      - name: Ferry gitea <-> github (仅 main)
+        env:
+          GITEA_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          git config user.name "ferry[bot]"
+          git config user.email "ferry[bot]@seekkey"
+
+          # gitea 侧用内置 Actions token（oauth2 形式，沿用 codeup-sync 先例）
+          git remote set-url origin "https://oauth2:${GITEA_TOKEN}@gitea.capitaltrain.cn/seekkey/key-agent.git"
+
+          # github 侧走 SSH，复用 ash3 节点上已有的 github 凭据
+          export GIT_SSH_COMMAND="ssh -o StrictHostKeyChecking=accept-new"
+          git remote add github "git@github.com:Seek-Key-LTD/key-agent.git" || \
+            git remote set-url github "git@github.com:Seek-Key-LTD/key-agent.git"
+
+          # github 间歇性不可达，fetch 加重试
+          ok=0
+          for i in 1 2 3 4 5 6; do
+            if git fetch github main; then ok=1; break; fi
+            echo "fetch github attempt $i 失败，重试"; sleep 12
+          done
+          [ "$ok" = "1" ] || { echo "::error::无法连接 github，跳过本次摆渡"; exit 1; }
+
+          GITEA_HEAD=$(git rev-parse HEAD)
+          GH_HEAD=$(git rev-parse github/main)
+          echo "gitea=$GITEA_HEAD github=$GH_HEAD"
+          if [ "$GITEA_HEAD" = "$GH_HEAD" ]; then
+            echo "已同步，无需摆渡"; exit 0
+          fi
+
+          push_github() {
+            for i in 1 2 3 4 5 6; do
+              if git push github "HEAD:refs/heads/main"; then return 0; fi
+              echo "push github attempt $i 失败，重试"; sleep 12
+            done
+            return 1
+          }
+
+          if git merge-base --is-ancestor "$GH_HEAD" "$GITEA_HEAD"; then
+            echo "gitea 领先 -> 推 gitea 到 github（fast-forward）"
+            push_github || { echo "::error::push github 失败"; exit 1; }
+          elif git merge-base --is-ancestor "$GITEA_HEAD" "$GH_HEAD"; then
+            echo "github 领先 -> gitea fast-forward 到 github，再推 gitea"
+            git merge --ff-only "$GH_HEAD"
+            git push origin main
+          else
+            echo "分叉 -> 把 github 合并进 gitea，再双向推送"
+            git merge github/main --no-edit || { echo "::error::冲突，需人工解决"; exit 1; }
+            git push origin main
+            push_github || { echo "::error::push github 失败"; exit 1; }
+          fi
