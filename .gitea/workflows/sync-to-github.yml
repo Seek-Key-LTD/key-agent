@@ -38,10 +38,22 @@ jobs:
           # gitea 侧用内置 Actions token（oauth2 形式，沿用 codeup-sync 先例）
           git remote set-url origin "https://oauth2:${GITEA_TOKEN}@gitea.capitaltrain.cn/seekkey/key-agent.git"
 
-          # github 侧走 SSH，复用 ash3 节点上已有的 github 凭据
-          export GIT_SSH_COMMAND="ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=20"
-          git remote add github "git@github.com:Seek-Key-LTD/key-agent.git" || \
-            git remote set-url github "git@github.com:Seek-Key-LTD/key-agent.git"
+          # github 侧走 HTTPS：仓库为公开仓，fetch 可匿名；push 需认证。
+          # 优先用 GH_PAT secret；否则尝试 gh auth setup-git（复用节点已登录的 gh）；
+          # 两者皆无则 push 会失败并在诊断里报出，便于定位。
+          git remote add github "https://github.com/Seek-Key-LTD/key-agent.git" || \
+            git remote set-url github "https://github.com/Seek-Key-LTD/key-agent.git"
+          if [ -n "${GH_PAT:-}" ]; then
+            git remote set-url github "https://x-access-token:${GH_PAT}@github.com/Seek-Key-LTD/key-agent.git"
+            log "github 认证：使用 GH_PAT secret"
+          elif command -v gh >/dev/null 2>&1; then
+            log "gh 存在：$(gh --version 2>/dev/null | head -1)"
+            gh auth setup-git 2>&1 | while read -r l; do log "gh-setup: $l"; done
+            gh auth status 2>&1 | while read -r l; do log "gh-status: $l"; done
+            log "github 认证：尝试 gh auth setup-git"
+          else
+            log "github 认证：无 GH_PAT 也无 gh -> push 将匿名失败"
+          fi
 
           # github 间歇性不可达，fetch 加重试
           ok=0
