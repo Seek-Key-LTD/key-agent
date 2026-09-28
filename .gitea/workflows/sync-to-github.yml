@@ -66,8 +66,8 @@ jobs:
             git merge --ff-only "$GH_HEAD"
             git push origin main
           else
-            echo "分叉 -> 把 github 合并进 gitea，再双向推送"
-            git merge github/main --no-edit || { echo "::error::冲突，需人工解决"; exit 1; }
+            echo "分叉/不共祖 -> 把 github 合并进 gitea（允许不共祖），再双向推送"
+            git merge github/main --no-edit --allow-unrelated-histories || { echo "::error::冲突，需人工解决"; exit 1; }
             git push origin main
             push_github || { echo "::error::push github 失败"; exit 1; }
           fi
