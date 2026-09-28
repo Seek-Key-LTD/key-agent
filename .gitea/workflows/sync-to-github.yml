@@ -1,7 +1,8 @@
 name: sync-to-github
 # 双向摆渡：在 3 号节点（ash3）runner 上运行，gitea <-> github 的 main 互为镜像。
 # 两方向都从 ash3 发起：gitea 领先就推 github；github 领先就拉回合并进 gitea；
-# 分叉则把 github 合并进 gitea 再双向推送。定时轮询 + gitea 推送即触发。
+# 分叉/不共祖则把 github 合并进 gitea（冲突以 github 为准，-X theirs），再双向推送。
+# 定时轮询 + gitea 推送即触发。每次运行的诊断会写回 ferry-status 分支便于排查。
 on:
   push:
     branches: [ main ]
@@ -23,7 +24,14 @@ jobs:
         env:
           GITEA_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          set -euo pipefail
+          set -uo pipefail
+          WS="${GITHUB_WORKSPACE:-$PWD}"
+          STATUS="$WS/ferry-status.txt"
+          : > "$STATUS"
+          log(){ echo "[$(date -u +%FT%TZ)] $*"; echo "[$(date -u +%FT%TZ)] $*" >> "$STATUS"; }
+          # 任何退出都把诊断推回 gitea（ferry-status 分支），即使 ssh/github 不通也能读
+          trap 'git config user.email "ferry[bot]@seekkey"; git config user.name "ferry[bot]"; git add -f ferry-status.txt; git commit -m "ferry status $(date -u +%FT%TZ)" >/dev/null 2>&1; git push origin HEAD:refs/heads/ferry-status --force >/dev/null 2>&1 || true' EXIT
+
           git config user.name "ferry[bot]"
           git config user.email "ferry[bot]@seekkey"
 
@@ -31,43 +39,49 @@ jobs:
           git remote set-url origin "https://oauth2:${GITEA_TOKEN}@gitea.capitaltrain.cn/seekkey/key-agent.git"
 
           # github 侧走 SSH，复用 ash3 节点上已有的 github 凭据
-          export GIT_SSH_COMMAND="ssh -o StrictHostKeyChecking=accept-new"
+          export GIT_SSH_COMMAND="ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=20"
           git remote add github "git@github.com:Seek-Key-LTD/key-agent.git" || \
             git remote set-url github "git@github.com:Seek-Key-LTD/key-agent.git"
 
           # github 间歇性不可达，fetch 加重试
           ok=0
-          for i in 1 2 3 4 5 6; do
-            if git fetch github main; then ok=1; break; fi
-            echo "fetch github attempt $i 失败，重试"; sleep 12
+          for i in $(seq 1 8); do
+            if git fetch github main 2>&1 | while read -r l; do log "fetch: $l"; done; then ok=1; log "fetch github 成功(第 $i 次)"; break; fi
+            log "fetch github 第 $i 次失败，重试"; sleep 15
           done
-          [ "$ok" = "1" ] || { echo "::error::无法连接 github，跳过本次摆渡"; exit 1; }
+          if [ "$ok" != "1" ]; then
+            log "::error::无法连接 github（8 次重试均失败）—— 检查 ash3 到 github.com 的网络/SSH 凭据"
+            exit 1
+          fi
 
           GITEA_HEAD=$(git rev-parse HEAD)
           GH_HEAD=$(git rev-parse github/main)
-          echo "gitea=$GITEA_HEAD github=$GH_HEAD"
+          log "GITEA_HEAD=$GITEA_HEAD  GH_HEAD=$GH_HEAD"
           if [ "$GITEA_HEAD" = "$GH_HEAD" ]; then
-            echo "已同步，无需摆渡"; exit 0
+            log "已同步，无需摆渡"; exit 0
           fi
 
           push_github() {
-            for i in 1 2 3 4 5 6; do
-              if git push github "HEAD:refs/heads/main"; then return 0; fi
-              echo "push github attempt $i 失败，重试"; sleep 12
+            for i in $(seq 1 6); do
+              if git push github "HEAD:refs/heads/main" 2>&1 | while read -r l; do log "push: $l"; done; then return 0; fi
+              log "push github 第 $i 次失败，重试"; sleep 15
             done
             return 1
           }
 
           if git merge-base --is-ancestor "$GH_HEAD" "$GITEA_HEAD"; then
-            echo "gitea 领先 -> 推 gitea 到 github（fast-forward）"
-            push_github || { echo "::error::push github 失败"; exit 1; }
+            log "gitea 领先 -> 推 gitea 到 github（fast-forward）"
+            push_github || { log "::error::push github 失败"; exit 1; }
           elif git merge-base --is-ancestor "$GITEA_HEAD" "$GH_HEAD"; then
-            echo "github 领先 -> gitea fast-forward 到 github，再推 gitea"
-            git merge --ff-only "$GH_HEAD"
-            git push origin main
+            log "github 领先 -> gitea fast-forward 到 github，再推 gitea"
+            git merge --ff-only "$GH_HEAD" 2>&1 | while read -r l; do log "merge: $l"; done
+            git push origin main 2>&1 | while read -r l; do log "push-origin: $l"; done
           else
-            echo "分叉/不共祖 -> 把 github 合并进 gitea（允许不共祖），再双向推送"
-            git merge github/main --no-edit --allow-unrelated-histories || { echo "::error::冲突，需人工解决"; exit 1; }
-            git push origin main
-            push_github || { echo "::error::push github 失败"; exit 1; }
+            log "分叉/不共祖 -> 把 github 合并进 gitea（冲突以 github 为准，-X theirs），再双向推送"
+            if ! git merge -X theirs --no-edit --allow-unrelated-histories github/main 2>&1 | while read -r l; do log "merge: $l"; done; then
+              log "::error::合并失败，需人工解决"; git merge --abort 2>/dev/null; exit 1
+            fi
+            git push origin main 2>&1 | while read -r l; do log "push-origin: $l"; done
+            push_github || { log "::error::push github 失败"; exit 1; }
           fi
+          log "摆渡完成"
