@@ -9,7 +9,9 @@ on:
 
 jobs:
   doc-gate:
-    runs-on: "nuc2:host"
+    # doc-gate 无需翻墙，本应走 nuc2；但 nuc2-runner(id 269) 服务端只授权了
+    # metabase-ops/nomad-ops，未对 key-agent 开放，故暂落 ash3（已验证可服务本仓）。
+    runs-on: ash3
     steps:
       - name: Checkout
         uses: actions/checkout@v4
