@@ -29,7 +29,6 @@ Key Agent
 | Oracle session adapter | `session/oracle/` | ⚠️ CLOB 绑定待修 |
 | k-agent 示例 | `examples/k-agent/` | ✅ LLM 调用通过（chat/completions） |
 | CI flow (5 架构) | `.github/workflows/build-k-agent.yml` | ✅ 全绿 |
-| Infisical secrets | project `secret-management` | ✅ 同步到 GH Actions |
 | GBrain MCP 连通性 | 本机 CLI 验证 | ✅ put/search/query/get 全通 |
 
 ## 3. 待开发 (按优先级)
@@ -85,7 +84,6 @@ Oracle        = 保留为实验 adapter, 不是路线前提
 | Oracle ADB lake5 | 见 Consul KV `picooraclaw/dsn` | ✅ 表已建 |
 | PG 集群 | 192.168.31.201/.203/.204 | ✅ Patroni |
 | Authentik | https://authentik.capitaltrain.cn | ✅ 刚修复 (PG 202 + Redis 104) |
-| Infisical | https://infisical.git4ta.fun | ✅ |
 | OCA S3 (教育网) | oca/21579-lhhq-164014/ | ✅ |
 | CF Worker | cernet-s3.git4ta.fun | ✅ |
 
@@ -109,7 +107,7 @@ cd ~/Projects/github/adk-go
 ./dist/k-agent-linux-amd64 \
   -dsn "$(curl -s http://127.0.0.1:8500/v1/kv/picooraclaw/dsn | jq -r '.[0].Value' | base64 -d)" \
   -base-url "http://100.121.16.28:4000/v1" \
-  -secret "$(cat ~/.infisical/token | head -c 40)" \
+  -secret "$LITELLM_API_KEY" \
   -model "azure-deepseek-v4-flash" \
   -prompt "你好, 测试"
 

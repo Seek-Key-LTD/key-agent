@@ -43,9 +43,9 @@ GH Actions 编译后分发到两处：
 
 ## Secrets
 
-- Infisical project：`secret-management`（ID: [redacted]
-- 已写入：`OCA_ACCESS_KEY`、`OCA_SECRET_KEY`
-- 自动同步到 GitHub Actions secrets
+- ~~Infisical~~ 已退役（2026-09-29），key-agent 代码无 Infisical 依赖
+- `OCA_ACCESS_KEY`、`OCA_SECRET_KEY`：以 GitHub Actions secrets 为准
+- 运行时身份/名片：Vault `secret/dev/agentcard/<agentName>`（见 internal/atoa）
 
 ## 下一步
 
