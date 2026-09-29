@@ -53,9 +53,9 @@ jobs:
               if [ -n "${DISPATCH_CHANNEL}" ] && [ "${DISPATCH_CHANNEL}" != "both" ] && [ "${DISPATCH_CHANNEL}" != "${channel}" ]; then
                 continue
               fi
-              mc cp --overwrite "$arch_bin" "${OCA}/${channel}/${fname}"
+              mc cp "$arch_bin" "${OCA}/${channel}/${fname}"
             done
-            mc cp --overwrite "$arch_bin" "${OCA}/versions/${VERSION}/${fname}"
+            mc cp "$arch_bin" "${OCA}/versions/${VERSION}/${fname}"
           done
           echo "✓ 已推送 dev+prod 双通道 + versions/${VERSION} 快照到教育网 S3"
 
