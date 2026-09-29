@@ -9,7 +9,7 @@ on:
 jobs:
   build-and-publish:
     name: Build 5-Arch Binaries on NUC & Publish to Gitea Registry
-    runs-on: nuc
+    runs-on: go-builder
     steps:
       - name: Checkout code (内网 Gitea clone，避免 github.com 间歇不可达)
         run: |
