@@ -59,8 +59,8 @@ func CallerIdentity(ctx context.Context) string {
 	return ""
 }
 
-// cacheEntry 是一条已验真的 userinfo 正向结果。
-type cacheEntry struct {
+// userinfoCacheEntry 是一条已验真的 userinfo 正向结果。
+type userinfoCacheEntry struct {
 	user     string
 	expireAt time.Time
 }
@@ -70,12 +70,12 @@ type cacheEntry struct {
 type verifyCache struct {
 	mu      sync.RWMutex
 	ttl     time.Duration
-	entries map[string]cacheEntry
+	entries map[string]userinfoCacheEntry
 	now     func() time.Time
 }
 
 func newVerifyCache(ttl time.Duration) *verifyCache {
-	return &verifyCache{ttl: ttl, entries: make(map[string]cacheEntry), now: time.Now}
+	return &verifyCache{ttl: ttl, entries: make(map[string]userinfoCacheEntry), now: time.Now}
 }
 
 func (c *verifyCache) get(key string) (string, bool) {
@@ -112,7 +112,7 @@ func (c *verifyCache) put(key, user string, hardExpire time.Time) {
 		return // 已过期，不缓存
 	}
 	c.mu.Lock()
-	c.entries[key] = cacheEntry{user: user, expireAt: expire}
+	c.entries[key] = userinfoCacheEntry{user: user, expireAt: expire}
 	if len(c.entries) > 1024 { // 机会式清理，给内存一个上界
 		for k, v := range c.entries {
 			if now.After(v.expireAt) {
