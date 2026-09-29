@@ -9,7 +9,7 @@ on:
 
 jobs:
   doc-gate:
-    runs-on: ash3
+    runs-on: "nuc2:host"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
