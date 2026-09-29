@@ -1,66 +1,83 @@
-name: Build and Publish KeyAgent Binaries (NUC Factory)
+name: Build and Publish KeyAgent Binaries (go-builder → 教育网 S3)
 
 on:
   push:
     branches: [ main ]
     tags: [ 'v*' ]
   workflow_dispatch:
+    inputs:
+      channel:
+        description: 发布通道 (dev / prod / both)
+        required: false
+        default: both
 
+# go-builder (CT131) 已配 oca alias，可 mc 直推教育网 S3；:host 执行器以 root 跑，读 /root/.mc
 jobs:
   build-and-publish:
-    name: Build 5-Arch Binaries on NUC & Publish to Gitea Registry
+    name: Cross-build 5-Arch & Publish 10 Packages to OCA S3
     runs-on: go-builder
     steps:
-      - name: Checkout code (内网 Gitea clone，避免 github.com 间歇不可达)
+      - name: Checkout (内网 Gitea clone，避免 github.com 间歇不可达)
         run: |
-          git clone --depth 1 --branch main \
+          git clone --depth 1 --branch ${GITHUB_REF_NAME} \
             https://oauth2:${{ secrets.KAGENT_PKG_TOKEN }}@gitea.capitaltrain.cn/seekkey/key-agent.git .
 
-      - name: Build and Publish Binaries to Package Registry
+      - name: Cross-compile 5 target architectures
         run: |
-          echo "=========================================================="
-          echo "🚀 [NUC Factory] Using Local Native Go: $(go version)"
-          echo "=========================================================="
-          VERSION="${GITHUB_REF_NAME:-latest}"
-          export GOPROXY="https://goproxy.cn,direct"
-          
+          set -euo pipefail
+          echo "🚀 [go-builder] $(go version)"
+          command -v mc >/dev/null || { echo "❌ mc 未安装于 go-builder"; exit 1; }
+          export GOPROXY="https://goproxy.cn,direct" CGO_ENABLED=0 GOWORK=off
           mkdir -p dist
-          
-          # Build 5 platforms
-          GOOS=linux GOARCH=amd64 go build -trimpath -ldflags '-s -w' -o dist/k-agent-linux-amd64 ./cmd/agent_dispatcher
-          GOOS=linux GOARCH=arm64 go build -trimpath -ldflags '-s -w' -o dist/k-agent-linux-arm64 ./cmd/agent_dispatcher
-          GOOS=linux GOARCH=arm GOARM=7 go build -trimpath -ldflags '-s -w' -o dist/k-agent-linux-armv7 ./cmd/agent_dispatcher
-          GOOS=darwin GOARCH=arm64 go build -trimpath -ldflags '-s -w' -o dist/k-agent-darwin-arm64 ./cmd/agent_dispatcher
-          GOOS=darwin GOARCH=amd64 go build -trimpath -ldflags '-s -w' -o dist/k-agent-darwin-amd64 ./cmd/agent_dispatcher
-          GOOS=windows GOARCH=amd64 go build -trimpath -ldflags '-s -w' -o dist/k-agent-windows-amd64.exe ./cmd/agent_dispatcher
+          # 5 部署架构（linux amd64/arm64/armv7 + darwin arm64/amd64）；windows 无 Nomad 节点，不产
+          GOOS=linux   GOARCH=amd64          go build -trimpath -ldflags '-s -w' -o dist/k-agent-linux-amd64   ./cmd/agent_dispatcher
+          GOOS=linux   GOARCH=arm64          go build -trimpath -ldflags '-s -w' -o dist/k-agent-linux-arm64   ./cmd/agent_dispatcher
+          GOOS=linux   GOARCH=arm  GOARM=7   go build -trimpath -ldflags '-s -w' -o dist/k-agent-linux-armv7   ./cmd/agent_dispatcher
+          GOOS=darwin  GOARCH=arm64          go build -trimpath -ldflags '-s -w' -o dist/k-agent-darwin-arm64  ./cmd/agent_dispatcher
+          GOOS=darwin  GOARCH=amd64          go build -trimpath -ldflags '-s -w' -o dist/k-agent-darwin-amd64  ./cmd/agent_dispatcher
+          ls -l dist/
+          echo "✓ 5 架构编译完成"
 
-          # Publish to Gitea Package Registry (generic 包同名禁止覆盖 → 先删旧再传)
-          for file in dist/*; do
-            filename=$(basename "$file")
-            echo "Uploading ${filename} to Gitea Package Registry..."
-            for target in "${VERSION}" "latest"; do
-              # 删除已存在的同名文件（不存在时 404 忽略）
-              curl -sf -X DELETE -H "Authorization: token ${{ secrets.KAGENT_PKG_TOKEN }}"               "https://gitea.capitaltrain.cn/api/packages/seekkey/generic/k-agent/${target}/${filename}" || true
-              curl -f -H "Authorization: token ${{ secrets.KAGENT_PKG_TOKEN }}"               --upload-file "$file"               "https://gitea.capitaltrain.cn/api/packages/seekkey/generic/k-agent/${target}/${filename}" || { echo "❌ UPLOAD FAILED: ${filename} → ${target}"; exit 1; }
-            done
-          done
-          echo "✓ Binaries published successfully!"
-
-      - name: Verify Registry Artifacts (SHA256 mismatch → fail)
+      - name: Publish 10 packages (5 arch × dev/prod) to 教育网 OCA S3
         run: |
-          # 回读 latest 产物，逐文件比对 SHA256——防‘上传了但没生效’的静默失败
-          echo "🔍 Verifying registry artifacts (SHA256)..."
-          for file in dist/*; do
-            filename=$(basename "$file")
-            local_sha=$(sha256sum "$file" | awk '{print $1}')
-            curl -sfL -H "Authorization: token ${{ secrets.KAGENT_PKG_TOKEN }}" -o "/tmp/verify_${filename}" "https://gitea.capitaltrain.cn/api/packages/seekkey/generic/k-agent/latest/${filename}" || { echo "❌ DOWNLOAD FAILED: ${filename}"; exit 1; }
-            remote_sha=$(sha256sum "/tmp/verify_${filename}" | awk '{print $1}')
-            if [ "$remote_sha" != "$local_sha" ]; then
-              echo "❌ SHA256 MISMATCH: ${filename}"
-              echo "   local : $local_sha"
-              echo "   remote: $remote_sha"
-              exit 1
-            fi
-            echo "✅ ${filename}: ${local_sha:0:12}… (SHA256 verified)"
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME:-latest}"
+          OCA="oca/21579-lhhq-164014/k-agent"
+          DISPATCH_CHANNEL="${{ inputs.channel }}"
+          # 每次构建都刷新 dev 与 prod 两条通道指针（Nomad 侧自行决定何时切换），共 5×2=10 个包
+          # 另存版本快照，供 Nomad 精确回滚 / 秒级切换
+          for arch_bin in dist/k-agent-*; do
+            fname=$(basename "$arch_bin")
+            [ -f "$arch_bin" ] || continue
+            for channel in dev prod; do
+              if [ -n "${DISPATCH_CHANNEL}" ] && [ "${DISPATCH_CHANNEL}" != "both" ] && [ "${DISPATCH_CHANNEL}" != "${channel}" ]; then
+                continue
+              fi
+              mc cp --overwrite "$arch_bin" "${OCA}/${channel}/${fname}"
+            done
+            mc cp --overwrite "$arch_bin" "${OCA}/versions/${VERSION}/${fname}"
           done
-          echo "✓ All 5 artifacts verified — registry is consistent with this build."
+          echo "✓ 已推送 dev+prod 双通道 + versions/${VERSION} 快照到教育网 S3"
+
+      - name: Verify S3 artifacts (SHA256 回读比对，防静默损坏)
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME:-latest}"
+          OCA="oca/21579-lhhq-164014/k-agent"
+          echo "🔍 回读校验 dev / prod / versions 三处产物..."
+          for arch_bin in dist/k-agent-*; do
+            fname=$(basename "$arch_bin")
+            [ -f "$arch_bin" ] || continue
+            local_sha=$(sha256sum "$arch_bin" | awk '{print $1}')
+            for path in "${OCA}/dev/${fname}" "${OCA}/prod/${fname}" "${OCA}/versions/${VERSION}/${fname}"; do
+              remote_sha=$(mc cat "$path" | sha256sum | awk '{print $1}')
+              if [ "$remote_sha" != "$local_sha" ]; then
+                echo "❌ SHA256 MISMATCH: $path"
+                echo "   local : $local_sha"
+                echo "   remote: $remote_sha"
+                exit 1
+              fi
+            done
+            echo "✅ ${fname}: ${local_sha:0:12}… 三通道一致"
+          done
+          echo "✓ 全部产物与本次构建一致，教育网 S3 已就绪，静待 Nomad 调度切换"
