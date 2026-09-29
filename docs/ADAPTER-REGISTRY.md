@@ -27,7 +27,7 @@
 
 | 外挂名 | 类型 | 后端 | model_id | dimension | version | 出网目标 |
 |---|---|---|---|---|---|---|
-| `model/openaimodel`（LiteLLM proxy） | L4 | LiteLLM | `azure-deepseek-v4-flash` | — | — | `http://100.121.16.28:4000/v1` |
+| `model/openaimodel`（LiteLLM proxy） | L4 | LiteLLM | `azure-deepseek-v4-flash` | — | — | `https://litellm.capitaltrain.cn/v1` |
 | `model/gemini` | L4 | Google GenAI | `gemini-2.5-flash` | — | — | `generativelanguage.googleapis.com` |
 
 ### Memory

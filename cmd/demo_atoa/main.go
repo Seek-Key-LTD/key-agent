@@ -19,7 +19,7 @@ import (
 )
 
 const (
-	LLMBaseURL = "http://100.121.16.28:4000/v1"
+	LLMBaseURL = "https://litellm.capitaltrain.cn/v1"
 	LLMAPIKey  = "sk-47318"
 	LLMModel   = "nova-deepseek-v4-flash-aggr"
 )

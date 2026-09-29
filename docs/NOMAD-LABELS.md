@@ -37,7 +37,7 @@ agent_card:
   model_provider:     local | anthropic | google | openai
   model_id:           deepseek-v4-flash
   model_version:      ...
-  endpoint:           http://100.121.16.28:4000/v1
+  endpoint:           https://litellm.capitaltrain.cn/v1
 
   # ③ 合规（关键）
   jurisdiction:       sg
