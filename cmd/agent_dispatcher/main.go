@@ -22,8 +22,8 @@ import (
 	"google.golang.org/adk/v2/messaging"
 )
 
-// PicoConfigFile represents local node configuration (e.g. from /root/.picooraclaw/config.json)
-type PicoConfigFile struct {
+// KeyAgentConfigFile represents local node configuration (e.g. from /etc/keyagent/config.json)
+type KeyAgentConfigFile struct {
 	Channels struct {
 		Matrix struct {
 			Enabled     bool     `json:"enabled"`
@@ -70,17 +70,24 @@ var defaultMastodonTokens = map[string]string{
 	"iron":       "mastodon_iron_88232541490b4909d062b225cdb2ee8f",
 }
 
-func loadPicoConfig(path string) *PicoConfigFile {
+func loadKeyAgentConfig(path string) *KeyAgentConfigFile {
 	if path == "" {
-		if envPath := os.Getenv("PICO_CONFIG"); envPath != "" {
+		if envPath := os.Getenv("KEYAGENT_CONFIG"); envPath != "" {
 			path = envPath
+		} else if envPath := os.Getenv("PICO_CONFIG"); envPath != "" {
+			path = envPath
+		} else if _, err := os.Stat("/etc/keyagent/config.json"); err == nil {
+			path = "/etc/keyagent/config.json"
+		} else if home, err := os.UserHomeDir(); err == nil && fileExists(home+"/.keyagent/config.json") {
+			path = home + "/.keyagent/config.json"
+		} else if home, err := os.UserHomeDir(); err == nil && fileExists(home+"/.config/keyagent/config.json") {
+			path = home + "/.config/keyagent/config.json"
 		} else if _, err := os.Stat("/root/.picooraclaw/config.json"); err == nil {
+			log.Printf("[Config] ⚠️ Legacy config path /root/.picooraclaw/config.json detected, please migrate to /etc/keyagent/config.json")
 			path = "/root/.picooraclaw/config.json"
-		} else if home, err := os.UserHomeDir(); err == nil {
-			candidate := home + "/.picooraclaw/config.json"
-			if _, err := os.Stat(candidate); err == nil {
-				path = candidate
-			}
+		} else if home, err := os.UserHomeDir(); err == nil && fileExists(home+"/.picooraclaw/config.json") {
+			log.Printf("[Config] ⚠️ Legacy config path %s/.picooraclaw/config.json detected, please migrate to %s/.keyagent/config.json", home, home)
+			path = home + "/.picooraclaw/config.json"
 		}
 	}
 	if path == "" {
@@ -91,13 +98,18 @@ func loadPicoConfig(path string) *PicoConfigFile {
 		log.Printf("[Config] ⚠️ Could not read config from %s: %v", path, err)
 		return nil
 	}
-	var cfg PicoConfigFile
+	var cfg KeyAgentConfigFile
 	if err := json.Unmarshal(data, &cfg); err != nil {
 		log.Printf("[Config] ⚠️ Could not parse config JSON from %s: %v", path, err)
 		return nil
 	}
 	log.Printf("[Config] ✅ Loaded configuration from %s", path)
 	return &cfg
+}
+
+func fileExists(p string) bool {
+	_, err := os.Stat(p)
+	return err == nil
 }
 
 func main() {
@@ -117,7 +129,7 @@ func main() {
 		}
 	}
 
-	picoCfg := loadPicoConfig(configPath)
+	agentCfg := loadKeyAgentConfig(configPath)
 
 	port := os.Getenv("PORT")
 	if port == "" {
@@ -136,11 +148,11 @@ func main() {
 
 	// Resolve agent identity (stone name from config takes priority over generic hostname/NODE_NAME)
 	agentName := ""
-	if picoCfg != nil {
-		if picoCfg.Oracle.AgentID != "" {
-			agentName = picoCfg.Oracle.AgentID
-		} else if picoCfg.Channels.Matrix.UserID != "" {
-			parts := strings.Split(picoCfg.Channels.Matrix.UserID, ":")
+	if agentCfg != nil {
+		if agentCfg.Oracle.AgentID != "" {
+			agentName = agentCfg.Oracle.AgentID
+		} else if agentCfg.Channels.Matrix.UserID != "" {
+			parts := strings.Split(agentCfg.Channels.Matrix.UserID, ":")
 			agentName = strings.TrimPrefix(parts[0], "@")
 		}
 	}
@@ -168,15 +180,15 @@ func main() {
 	matrixToken := os.Getenv("MATRIX_TOKEN")
 	matrixUserID := os.Getenv("MATRIX_USER_ID")
 
-	if picoCfg != nil && picoCfg.Channels.Matrix.Enabled {
+	if agentCfg != nil && agentCfg.Channels.Matrix.Enabled {
 		if matrixServer == "" {
-			matrixServer = picoCfg.Channels.Matrix.Homeserver
+			matrixServer = agentCfg.Channels.Matrix.Homeserver
 		}
 		if matrixToken == "" {
-			matrixToken = picoCfg.Channels.Matrix.AccessToken
+			matrixToken = agentCfg.Channels.Matrix.AccessToken
 		}
 		if matrixUserID == "" {
-			matrixUserID = picoCfg.Channels.Matrix.UserID
+			matrixUserID = agentCfg.Channels.Matrix.UserID
 		}
 	}
 	if matrixServer == "" {
@@ -212,15 +224,15 @@ func main() {
 	// 2. Mastodon Channel Initialization
 	mastodonServer := os.Getenv("MASTODON_SERVER")
 	if mastodonServer == "" {
-		if picoCfg != nil && picoCfg.Channels.Mastodon.Server != "" {
-			mastodonServer = picoCfg.Channels.Mastodon.Server
+		if agentCfg != nil && agentCfg.Channels.Mastodon.Server != "" {
+			mastodonServer = agentCfg.Channels.Mastodon.Server
 		} else {
 			mastodonServer = "https://mastodon.capitaltrain.cn"
 		}
 	}
 	mastodonToken := os.Getenv("MASTODON_TOKEN")
-	if mastodonToken == "" && picoCfg != nil && picoCfg.Channels.Mastodon.AccessToken != "" {
-		mastodonToken = picoCfg.Channels.Mastodon.AccessToken
+	if mastodonToken == "" && agentCfg != nil && agentCfg.Channels.Mastodon.AccessToken != "" {
+		mastodonToken = agentCfg.Channels.Mastodon.AccessToken
 	}
 	if mastodonToken == "" && agentName != "" {
 		// Attempt Consul KV lookup: mastodon/clients/<agentName>/token
