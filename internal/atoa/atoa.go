@@ -145,12 +145,12 @@ func LoadASNCardFields(vaultAddr, agentName string) (soulName, evmAddr, constell
 			evmAddr = m["evm_address"]
 			constellation = m["constellation_house"]
 		}
-	} else if os.Getenv("KEYAGENT_FLAVOR") == "guest" {
+	} else if os.Getenv("KEYAGENT_FLAVOR") == secrets.FlavorGuest {
 		log.Printf("atoa: guest secret provider unavailable: %v (agentcard degraded to empty)", err)
 	}
 
 	// 2. Consul KV: coherence/<from>/<agentName> — 收集所有 agent 对本 agent 的昵称（host-only）
-	if os.Getenv("KEYAGENT_FLAVOR") == "guest" {
+	if os.Getenv("KEYAGENT_FLAVOR") == secrets.FlavorGuest {
 		return
 	}
 	consulAddr := os.Getenv("CONSUL_ADDR")

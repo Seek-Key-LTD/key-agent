@@ -32,7 +32,7 @@ type InfisicalProvider struct {
 func NewInfisicalFromEnv() (*InfisicalProvider, error) {
 	base := os.Getenv("INFISICAL_URL")
 	if base == "" {
-		base = "https://infisical.git4ta.fun"
+		base = DefaultInfisicalURL
 	}
 	p := &InfisicalProvider{
 		BaseURL:      strings.TrimSuffix(base, "/"),

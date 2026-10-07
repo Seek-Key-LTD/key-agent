@@ -20,7 +20,7 @@ type VaultProvider struct {
 
 func NewVault(addr string) (*VaultProvider, error) {
 	if addr == "" {
-		addr = "https://vault.capitaltrain.cn"
+		addr = DefaultVaultAddr
 	}
 	token := ReadVaultToken()
 	if token == "" {

@@ -9,15 +9,16 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
+	"os"
 	"time"
 
 	_ "github.com/sijms/go-ora/v2"
+	"google.golang.org/adk/v2/internal/secrets"
 )
 
-// VaultLake5Config represents Vault credentials for Oracle ADB 26ai (5号湖泊)
-type VaultLake5Config struct {
+// Lake5Config represents credentials for Oracle ADB 26ai (5号湖泊 Lake 5)
+// 逻辑路径 oracle/config/lake5（Host=Vault / Guest=Infisical，见 wiki Key-Agent-Predefines §3）
+type Lake5Config struct {
 	Host        string `json:"host"`
 	Port        string `json:"port"`
 	Username    string `json:"username"`
@@ -39,21 +40,22 @@ type CollectiveMemoryRecord struct {
 
 // UnifiedContextManager handles reads/writes to Oracle Lake 5
 type UnifiedContextManager struct {
-	vaultAddr  string
-	vaultToken string
-	db         *sql.DB
+	provider secrets.Provider
+	db       *sql.DB
 }
 
-// NewUnifiedContextManager initializes connection to Oracle ADB 26ai Lake 5 via Vault
-func NewUnifiedContextManager(vaultAddr, vaultToken string) (*UnifiedContextManager, error) {
-	mgr := &UnifiedContextManager{
-		vaultAddr:  vaultAddr,
-		vaultToken: vaultToken,
-	}
-
-	cfg, err := mgr.fetchVaultConfig()
+// NewUnifiedContextManager initializes connection to Oracle ADB 26ai Lake 5
+// via the flavor-appropriate secret provider (host=Vault, guest=Infisical).
+func NewUnifiedContextManager() (*UnifiedContextManager, error) {
+	provider, err := secrets.ForFlavor(os.Getenv("VAULT_ADDR"))
 	if err != nil {
-		return nil, fmt.Errorf("failed to fetch Oracle Lake 5 config from Vault: %w", err)
+		return nil, fmt.Errorf("secret provider unavailable: %w", err)
+	}
+	mgr := &UnifiedContextManager{provider: provider}
+
+	cfg, err := mgr.fetchLake5Config()
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch Oracle Lake 5 config via %s provider: %w", provider.Flavor(), err)
 	}
 
 	// Build Oracle TCPS Connection DSN using pure-go go-ora driver
@@ -69,38 +71,21 @@ func NewUnifiedContextManager(vaultAddr, vaultToken string) (*UnifiedContextMana
 	return mgr, nil
 }
 
-// fetchVaultConfig reads secret/data/oracle/config/lake5 from Vault
-func (m *UnifiedContextManager) fetchVaultConfig() (*VaultLake5Config, error) {
-	url := fmt.Sprintf("%s/v1/secret/data/oracle/config/lake5", m.vaultAddr)
-	req, err := http.NewRequest("GET", url, nil)
+// fetchLake5Config reads logical path oracle/config/lake5 through the provider
+func (m *UnifiedContextManager) fetchLake5Config() (*Lake5Config, error) {
+	kv, err := m.provider.Get(context.Background(), "oracle/config/lake5")
 	if err != nil {
 		return nil, err
 	}
-
-	req.Header.Set("X-Vault-Token", m.vaultToken)
-	client := &http.Client{Timeout: 5 * time.Second}
-	resp, err := client.Do(req)
+	b, err := json.Marshal(kv)
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
+	var cfg Lake5Config
+	if err := json.Unmarshal(b, &cfg); err != nil {
 		return nil, err
 	}
-
-	var vaultResp struct {
-		Data struct {
-			Data VaultLake5Config `json:"data"`
-		} `json:"data"`
-	}
-
-	if err := json.Unmarshal(body, &vaultResp); err != nil {
-		return nil, err
-	}
-
-	return &vaultResp.Data.Data, nil
+	return &cfg, nil
 }
 
 // EnsureTableExists creates the collective memory table in Oracle ADB 26ai

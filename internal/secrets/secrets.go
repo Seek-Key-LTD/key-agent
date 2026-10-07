@@ -17,10 +17,19 @@ type Provider interface {
 	Get(ctx context.Context, path string) (map[string]string, error)
 }
 
+// 两侧默认端点（约定真相源：repo wiki「Key-Agent-Predefines」§2）。
+const (
+	DefaultVaultAddr    = "https://vault.capitaltrain.cn"
+	DefaultInfisicalURL = "https://infisical.git4ta.fun"
+
+	FlavorHost  = "host"
+	FlavorGuest = "guest"
+)
+
 // ForFlavor 按当前 flavor 构造 Provider。
 func ForFlavor(vaultAddr string) (Provider, error) {
 	switch flavor() {
-	case "guest":
+	case FlavorGuest:
 		return NewInfisicalFromEnv()
 	default:
 		return NewVault(vaultAddr)
@@ -30,7 +39,7 @@ func ForFlavor(vaultAddr string) (Provider, error) {
 func flavor() string {
 	f := os.Getenv("KEYAGENT_FLAVOR")
 	if f == "" {
-		return "host"
+		return FlavorHost
 	}
 	return f
 }
