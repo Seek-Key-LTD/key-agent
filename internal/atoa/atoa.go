@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"iter"
+	"log"
 	"net/http"
 	"os"
 	"strings"
@@ -17,6 +18,7 @@ import (
 	"github.com/a2aproject/a2a-go/v2/a2asrv"
 
 	"google.golang.org/adk/v2/auth"
+	"google.golang.org/adk/v2/internal/secrets"
 )
 
 // LLMConfig 配置 LLM 调用（litellm）。
@@ -126,8 +128,9 @@ func NewStaticExtendedAgentCardHandler(card *ExtendedAgentCard) http.Handler {
 	})
 }
 
-// LoadASNCardFields 从 Vault 读取 agentcard secret（soul_name/evm_address/constellation_house），
-// 并从 Consul KV 读取 coherence（其他 agent 对本 agent 的称呼昵称）。
+// LoadASNCardFields 按 flavor 读取 agentcard（soul_name/evm_address/constellation_house）：
+// host 走 Vault，guest 走 Infisical（见 internal/secrets）。
+// 并从 Consul KV 读取 coherence（其他 agent 对本 agent 的称呼昵称，仅 host flavor）。
 // 任一来源失败时降级为空值，不阻塞 AgentCard 输出。
 func LoadASNCardFields(vaultAddr, agentName string) (soulName, evmAddr, constellation string, coherence map[string]string) {
 	coherence = map[string]string{}
@@ -135,36 +138,21 @@ func LoadASNCardFields(vaultAddr, agentName string) (soulName, evmAddr, constell
 		return
 	}
 
-	// 1. Vault: secret/dev/agentcard/<agentName>
-	if vaultAddr != "" {
-		client := &http.Client{Timeout: 5 * time.Second}
-		token := readVaultToken()
-		if token != "" {
-			req, err := http.NewRequest("GET", vaultAddr+"/v1/secret/data/dev/agentcard/"+agentName, nil)
-			if err == nil {
-				req.Header.Set("X-Vault-Token", token)
-				if resp, err := client.Do(req); err == nil {
-					defer resp.Body.Close()
-					var vr struct {
-						Data struct {
-							Data struct {
-								SoulName      string `json:"soul_name"`
-								EVMAddress    string `json:"evm_address"`
-								Constellation string `json:"constellation_house"`
-							} `json:"data"`
-						} `json:"data"`
-					}
-					if err := json.NewDecoder(resp.Body).Decode(&vr); err == nil {
-						soulName = vr.Data.Data.SoulName
-						evmAddr = vr.Data.Data.EVMAddress
-						constellation = vr.Data.Data.Constellation
-					}
-				}
-			}
+	// 1. 凭据面读取: <mount>/dev/agentcard/<agentName>
+	if p, err := secrets.ForFlavor(vaultAddr); err == nil {
+		if m, err := p.Get(context.Background(), "dev/agentcard/"+agentName); err == nil {
+			soulName = m["soul_name"]
+			evmAddr = m["evm_address"]
+			constellation = m["constellation_house"]
 		}
+	} else if os.Getenv("KEYAGENT_FLAVOR") == "guest" {
+		log.Printf("atoa: guest secret provider unavailable: %v (agentcard degraded to empty)", err)
 	}
 
-	// 2. Consul KV: coherence/<from>/<agentName> — 收集所有 agent 对本 agent 的昵称
+	// 2. Consul KV: coherence/<from>/<agentName> — 收集所有 agent 对本 agent 的昵称（host-only）
+	if os.Getenv("KEYAGENT_FLAVOR") == "guest" {
+		return
+	}
 	consulAddr := os.Getenv("CONSUL_ADDR")
 	if consulAddr == "" {
 		consulAddr = "http://127.0.0.1:8500"
@@ -194,17 +182,6 @@ func LoadASNCardFields(vaultAddr, agentName string) (soulName, evmAddr, constell
 	}
 
 	return
-}
-
-// readVaultToken 依次尝试常见 token 来源。
-func readVaultToken() string {
-	paths := []string{"/etc/vault-agent/token", "/root/.vault-token"}
-	for _, p := range paths {
-		if b, err := os.ReadFile(p); err == nil {
-			return strings.TrimSpace(string(b))
-		}
-	}
-	return os.Getenv("VAULT_TOKEN")
 }
 
 // agentName/description 为名片字段；userInfoURL 为 authentik userinfo 端点。
