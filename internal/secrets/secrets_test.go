@@ -52,11 +52,16 @@ func TestInfisicalProviderGet(t *testing.T) {
 			if got := r.URL.Query().Get("secretPath"); got != "/dev/agentcard/amber" {
 				t.Errorf("secretPath = %q", got)
 			}
+			// 实机 v0.165.16 只接受 workspaceId 参数（projectId 会被 400 拒绝）
+			if got := r.URL.Query().Get("workspaceId"); got != "pid" {
+				t.Errorf("workspaceId = %q", got)
+			}
+			// 实机响应为顶层 secrets 数组
 			_ = json.NewEncoder(w).Encode(map[string]any{
-				"data": map[string]any{"result": map[string]any{"secrets": []any{
+				"secrets": []any{
 					map[string]any{"secretKey": "soul_name", "secretValue": "琥珀"},
 					map[string]any{"secretKey": "evm_address", "secretValue": "0x2"},
-				}}},
+				},
 			})
 		default:
 			t.Errorf("unexpected path %q", r.URL.Path)

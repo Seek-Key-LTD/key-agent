@@ -110,7 +110,7 @@ func (p *InfisicalProvider) Get(ctx context.Context, path string) (map[string]st
 		return nil, err
 	}
 	q := url.Values{}
-	q.Set("projectId", p.ProjectID)
+	q.Set("workspaceId", p.ProjectID)
 	q.Set("environment", p.Environment)
 	q.Set("secretPath", "/"+path)
 	u := p.BaseURL + "/api/v3/secrets/raw?" + q.Encode()
@@ -148,7 +148,10 @@ func (p *InfisicalProvider) Get(ctx context.Context, path string) (map[string]st
 	if err := json.NewDecoder(resp.Body).Decode(&raw); err != nil {
 		return nil, err
 	}
-	secretsList := dig(raw, "data", "result", "secrets")
+	secretsList := dig(raw, "secrets")
+	if secretsList == nil {
+		secretsList = dig(raw, "data", "result", "secrets")
+	}
 	if secretsList == nil {
 		secretsList = dig(raw, "result", "secrets")
 	}
