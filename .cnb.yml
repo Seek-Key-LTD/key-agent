@@ -1,0 +1,12 @@
+# key-agent CNB 配置
+#
+# 目的：在 CNB 上启用「知识库 + NPC」两项 AI 能力，使其成为 ASN 语料的可检索入口。
+# 参考 hello-cnb 实战（8/8 全绿配方）：知识库由 knowledge:update 事件被动配出，
+# swagger 中并无「创建知识库」接口，故必须有此事件声明。
+
+$:
+  knowledge:update:
+    - stages:
+        - name: index-repo-knowledge
+          # 未配置知识库时会 404（KnowledgeBase Not Found），不阻塞整条流水线
+          ignoreProcessFailures: true

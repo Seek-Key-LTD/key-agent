@@ -1,0 +1,19 @@
+# CNB 仓库级开关
+# npc: 段赋予本仓库「NPC 角色」能力（对应仓库 flags 中的 NPC 标记），
+#      配好后可在 Issue / PR 评论中以 @npc 唤起助手，消耗 AI Credits。
+
+workspace:
+  launch:
+    button: true
+
+fork:
+  button: true
+
+npc:
+  roles:
+    - name: 代码助手
+      slogan: Key Agent 架构问答与代码导航
+    - name: 审查员
+      slogan: ASN 运行时代码评审
+  defaultRole: 代码助手
+  button: true
