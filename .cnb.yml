@@ -1,8 +1,10 @@
 # key-agent CNB 配置
 #
-# 目的：在 CNB 上启用「知识库 + NPC」两项 AI 能力，使其成为 ASN 语料的可检索入口。
+# 目的：在 CNB 上启用「知识库 + NPC + Code Wiki」三项 AI 能力，使其成为 ASN 语料的可检索入口。
 # 参考 hello-cnb 实战（8/8 全绿配方）：知识库由 knowledge:update 事件被动配出，
 # swagger 中并无「创建知识库」接口，故必须有此事件声明。
+# Code Wiki：打 tag 触发 cnbcool/codewiki 插件自动生成代码维基（也可在 Issue/PR
+# 评论区召唤 @npc/codewiki(codewiki) 生成codewiki）。
 
 $:
   knowledge:update:
@@ -10,3 +12,12 @@ $:
         - name: index-repo-knowledge
           # 未配置知识库时会 404（KnowledgeBase Not Found），不阻塞整条流水线
           ignoreProcessFailures: true
+  tag_push:
+    - docker:
+        image: cnbcool/codewiki:latest
+      stages:
+        - name: generate codewiki
+          timeout: 10h
+          settings:
+            git_doc_dir: /data/codewiki/${CNB_REPO_SLUG}
+            knowledge_enabled: true
