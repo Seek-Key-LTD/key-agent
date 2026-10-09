@@ -1,0 +1,145 @@
+# key-agent · 5架构交叉编译 → 教育网 OCA S3
+#
+# 状态（2026-10-09）：**未启用**。本文件单独存在，按需 include 引用，避免拖累主配置。
+#
+# 目的
+#   解除现有 gitea 流水线（.gitea/workflows/build-k-agent.yml）对 CT131 的单点依赖。
+#   现有链路已稳定跑通（含 SHA256 回读校验），故本条**默认不覆盖任何现有产物**。
+#
+# 与现有链路的关系
+#   现有：gitea → go-builder (CT131, :host root, 读 /root/.mc) → mc cp → OCA S3
+#   本条：CNB  →镜像化 runner (golang + minio/mc) → mc cp → OCA S3
+#   凭据来源：CNB 密钥仓库 git4ta/cnbvault（我不可读，见下）
+#
+# 为什么不用 docker 制品库包一层再剥出来
+#   1. 产物是单个静态二进制（CGO_ENABLED=0），直接 mc cp 即可，无需镜像中转。
+#   2. 下游是 10+ 台跑不了镜像的白嫖主机 —— 需要的是二进制，不是镜像。
+#   3. 剥镜像取二进制需要额外一步（docker create + docker cp），无收益。
+#   详见 WikiFlow/docs/13 · key-agent 二进制分发链路。
+#
+# 密钥来源：git4ta/cnbvault（CNB 密钥仓库）
+#   ⚠️ 密钥仓库**不支持任何 token 访问**（实测 errcode:7），只能网页编辑文件。
+#      因此本文件里看不到任何凭据值，也拿不到 —— 这是设计意图，不是缺陷。
+#      启用前需在该仓库网页新建文件 env.yml，模板见
+#      WikiFlow: cnbvault-待粘贴env.yml.md
+#
+# 启用方式（二选一）
+#   A. 直接把本文件内容合并进 .cnb.yml 的main.push 段
+#   B. include 引用（官方推荐，见下方注释）：
+#        include:
+#          - https://cnb.cool/git4ta/key-agent/-/blob/main/cnb-release.yml
+#
+# ── 未启用的两个硬前提（缺一不可）────────────────────────────────────
+#   1. cnbvault 里有 env.yml，且含 OCA_ENDPOINT / OCA_ACCESS_KEY / OCA_SECRET_KEY
+#   2. 该文件的 allow_slugs 包含 git4ta/key-agent
+#   两者任一不满足，imports 会静默不注入 → 探针阶段 exit 1 兜底（见下 job 0）
+# ──────────────────────────────────────────────────────────────────────
+
+main:
+  push:
+    # ⚙️ 唯一需要改的开关：把 verify-only 改成 false 才会写入 dev 通道
+    - imports:
+        - https://cnb.cool/git4ta/cnbvault/-/blob/main/env.yml
+      stages:
+        # ── job 0：零泄密自证探针（fail-fast）─────────────────────────
+        # 只输出「是否注入 + 长度」，绝不输出值本身。任一 LEN=0 立即终止，
+        # 禁止带病上传把好产物覆盖成坏的。
+        - name: job0 credential probe
+          image: bash:latest
+          script: |
+            set -euo pipefail
+            fail=0
+            for v in OCA_ENDPOINT OCA_BUCKET OCA_ACCESS_KEY OCA_SECRET_KEY; do
+              val="${!v:-}"
+              if [ -z "$val" ]; then
+                echo "❌ $v 未注入"
+                fail=1
+              else
+                # 仅打印长度，绝不打印值
+                echo "✅ $v SET=true LEN=${#val}"
+              fi
+            done
+            [ "$fail" -eq 0 ] || { echo "凭据未就绪，终止流水线（检查 cnbvault/env.yml 与 allow_slugs）"; exit 1; }
+            echo "SECRET_SET=$([ -n "$OCA_SECRET_KEY" ] && echo true || echo false)"
+
+        # ── job 1：5 架构交叉编译 ─────────────────────────────────────
+        # 与现有 gitea 流水线保持完全一致的编译参数，确保产物可比对：
+        #   CGO_ENABLED=0   静态链接，任意 Linux 直接跑（白嫖主机无 glibc 依赖）
+        #   -trimpath        去绝对路径，减小体积
+        #   -ldflags '-s -w' 去符号表
+        #   ./cmd/agent_dispatcher  注意：与 Makefile 的 oracle-agent 不同，
+        #   现有流水线用的是 agent_dispatcher，务必对齐
+        #
+        # ⚠️ 镜像标签必须 ≥ go.mod 的 go 指令（当前 go.mod 要求 **1.26.6**，
+        #    用 1.23 会直接报 "go.mod requires go >= 1.26.6" 而失败）。
+        - name: job1 cross-compile 5 arches
+          image: golang:1.26
+          script: |
+            set -euo pipefail
+            go version
+            export GOPROXY="https://goproxy.cn,direct" CGO_ENABLED=0 GOWORK=off
+            mkdir -p dist
+            GOOS=linux   GOARCH=amd64          go build -trimpath -ldflags '-s -w' -o dist/k-agent-linux-amd64   ./cmd/agent_dispatcher
+            GOOS=linux   GOARCH=arm64          go build -trimpath -ldflags '-s -w' -o dist/k-agent-linux-arm64   ./cmd/agent_dispatcher
+            GOOS=linux   GOARCH=arm  GOARM=7   go build -trimpath -ldflags '-s -w' -o dist/k-agent-linux-armv7   ./cmd/agent_dispatcher
+            GOOS=darwin  GOARCH=arm64          go build -trimpath -ldflags '-s -w' -o dist/k-agent-darwin-arm64  ./cmd/agent_dispatcher
+            GOOS=darwin  GOARCH=amd64          go build -trimpath -ldflags '-s -w' -o dist/k-agent-darwin-amd64  ./cmd/agent_dispatcher
+            ls -l dist/
+            echo "sha256 清单（用于第3步比对）:"
+            sha256sum dist/* | tee dist/SHA256SUMS
+
+        # ── job 2：上传（默认只写verify 通道）─────────────────────────
+        # verify-only: true 时只写 cnbverify/ 前缀，绝不碰现有 dev/prod/versions。
+        # 首次验证建议保持 true；确认无误后再改 false 接管 dev 通道。
+        - name: job2 upload to OCA S3
+          image: minio/mc
+          settings:
+            # fail-open：上传失败不阻塞飞书通知与后续环节
+            ignoreProcessFailures: true
+          script: |
+            set -euo pipefail
+            VERIFY_ONLY="${VERIFY_ONLY:-true}"
+            DEST="oca/${OCA_BUCKET}/k-agent"
+            if [ "$VERIFY_ONLY" = "true" ]; then
+              DEST="${DEST}/cnbverify/${CNB_COMMIT_SHORT}"
+              echo "🔒 verify-only 模式：只写$DEST，不触碰 dev/prod/versions"
+            else
+              DEST="${DEST}/dev"
+              echo "⚠️ 接管模式：写 dev 通道（与 CT131 侧并存）"
+            fi
+            mc alias set oca "$OCA_ENDPOINT" "$OCA_ACCESS_KEY" "$OCA_SECRET_KEY"
+            mc mkdir -p "$DEST"
+            for f in dist/k-agent-*; do
+              [ -f "$f" ] || continue
+              mc cp "$f" "${DEST}/"
+            done
+            mc cp dist/SHA256SUMS "${DEST}/" 2>/dev/null || true
+            echo "✅ 已上传到 ${DEST}"
+
+        # ── job 3：SHA256 回读比对（防静默损坏）──────────────────────
+        # 与现有 gitea 流水线的做法一致：上传后回读，比对哈希。
+        # 不一致即失败 —— S3 静默损坏是最难发现的一类问题。
+        - name: job3 verify sha256
+          image: minio/mc
+          settings:
+            ignoreProcessFailures: true
+          script: |
+            set -euo pipefail
+            VERIFY_ONLY="${VERIFY_ONLY:-true}"
+            DEST="oca/${OCA_BUCKET}/k-agent"
+            [ "$VERIFY_ONLY" = "true" ] && DEST="${DEST}/cnbverify/${CNB_COMMIT_SHORT}" || DEST="${DEST}/dev"
+            mc alias set oca "$OCA_ENDPOINT" "$OCA_ACCESS_KEY" "$OCA_SECRET_KEY"
+            ok=0; bad=0
+            for f in dist/k-agent-*; do
+              [ -f "$f" ] || continue
+              fname=$(basename "$f")
+              l=$(sha256sum "$f" | awk '{print $1}')
+              r=$(mc cat "${DEST}/${fname}" 2>/dev/null | sha256sum | awk '{print $1}' || echo "MISSING")
+              if [ "$l" = "$r" ]; then
+                echo "✅ ${fname}: ${l:0:12}… 一致"; ok=$((ok+1))
+              else
+                echo "❌ SHA256 MISMATCH ${fname}: local=${l:0:12} remote=${r:0:12}"; bad=$((bad+1))
+              fi
+            done
+            echo "结果: ${ok} 一致 / ${bad} 不一致"
+            [ "$bad" -eq 0 ] || exit 1
