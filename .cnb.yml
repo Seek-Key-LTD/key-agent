@@ -1,10 +1,20 @@
 # key-agent CNB 配置
 #
-# 目的：在 CNB 上启用「知识库 + NPC + Code Wiki」三项 AI 能力，使其成为 ASN 语料的可检索入口。
+# 目的：在 CNB 上启用「知识库 + NPC + Code Wiki + 构建飞书通知」四项 AI/可观测能力，
+#使其成为 ASN 语料的可检索入口，并让每次构建都飞书可见。
 # 参考 hello-cnb 实战（8/8 全绿配方）：知识库由 knowledge:update 事件被动配出，
 # swagger 中并无「创建知识库」接口，故必须有此事件声明。
 # Code Wiki：打 tag 触发 cnbcool/codewiki 插件自动生成代码维基（也可在 Issue/PR
 # 评论区召唤 @npc/codewiki(codewiki) 生成codewiki）。
+#
+# 飞书通知（2026-10-09 接入）：
+#   事件     push / pull_request / tag_push —— 覆盖构建、PR、Code Wiki 三类
+#   接收端   飞书自定义机器人（卡片消息）
+#   安全     机器人侧已关闭「签名校验」，故本文件不含任何 secret
+#   ⚠️ 已知限制：CNB 的 cnbcool/webhook 插件签名算法是 HMAC-SHA256(body, key)，
+#      与飞书要求的 HMAC-SHA256(timestamp + "\n" + secret, key) **不等价**。
+#      即保留飞书签名校验无法用原生插件实现，只能关闭。URL 本身即凭证，
+#      它明文存在于本文件中（等同密钥入版本库），属已知取舍。
 
 $:
   knowledge:update:
@@ -21,3 +31,107 @@ $:
           settings:
             git_doc_dir: /data/codewiki/${CNB_REPO_SLUG}
             knowledge_enabled: true
+    - stages:
+        - name: notify feishu
+          image: cnbcool/webhook
+          settings:
+            urls:
+              - https://open.feishu.cn/open-apis/bot/v2/hook/ee30af3c-9ddf-4010-99f5-20dd3ad35f46
+            method: POST
+            content_type: application/json
+            # 通知失败不阻塞业务流水线（Code Wiki 生成成功才是要紧的）
+            ignoreProcessFailures: true
+            template: |
+              {
+                "msg_type": "interactive",
+                "card": {
+                  "config": { "wide_screen_mode": true },
+                  "header": {
+                    "title": { "tag": "plain_text", "content": "key-agent · Tag 触发 Code Wiki" },
+                    "template": "green"
+                  },
+                  "elements": [
+                    { "tag": "div", "fields": [
+                      { "is_short": true, "text": { "tag": "lark_md", "content": "**事件**\n{{ CNB_EVENT }}" } },
+                      { "is_short": true, "text": { "tag": "lark_md", "content": "**触发者**\n{{ CNB_BUILD_USER }}" } },
+                      { "is_short": true, "text": { "tag": "lark_md", "content": "**分支/标签**\n{{ CNB_BRANCH }}" } },
+                      { "is_short": true, "text": { "tag": "lark_md", "content": "**提交**\n{{ CNB_COMMIT_SHORT }}" } }
+                    ]},
+                    { "tag": "div", "text": { "tag": "lark_md", "content": "**提交信息**\n{{ CNB_COMMIT_MESSAGE_TITLE }}" } },
+                    { "tag": "action", "actions": [
+                      { "tag": "button", "text": { "tag": "plain_text", "content": "查看构建" },
+                        "url": "{{ CNB_BUILD_WEB_URL }}", "type": "primary" }
+                    ]}
+                  ]
+                }
+              }
+
+main:
+  push:
+    - stages:
+        - name: notify feishu
+          image: cnbcool/webhook
+          settings:
+            urls:
+              - https://open.feishu.cn/open-apis/bot/v2/hook/ee30af3c-9ddf-4010-99f5-20dd3ad35f46
+            method: POST
+            content_type: application/json
+            ignoreProcessFailures: true
+            template: |
+              {
+                "msg_type": "interactive",
+                "card": {
+                  "config": { "wide_screen_mode": true },
+                  "header": {
+                    "title": { "tag": "plain_text", "content": "key-agent · 代码推送" },
+                    "template": "blue"
+                  },
+                  "elements": [
+                    { "tag": "div", "fields": [
+                      { "is_short": true, "text": { "tag": "lark_md", "content": "**事件**\n{{ CNB_EVENT }}" } },
+                      { "is_short": true, "text": { "tag": "lark_md", "content": "**触发者**\n{{ CNB_BUILD_USER }}" } },
+                      { "is_short": true, "text": { "tag": "lark_md", "content": "**分支**\n{{ CNB_BRANCH }}" } },
+                      { "is_short": true, "text": { "tag": "lark_md", "content": "**提交**\n{{ CNB_COMMIT_SHORT }}" } }
+                    ]},
+                    { "tag": "div", "text": { "tag": "lark_md", "content": "**提交信息**\n{{ CNB_COMMIT_MESSAGE_TITLE }}" } },
+                    { "tag": "action", "actions": [
+                      { "tag": "button", "text": { "tag": "plain_text", "content": "查看构建" },
+                        "url": "{{ CNB_BUILD_WEB_URL }}", "type": "primary" }
+                    ]}
+                  ]
+                }
+              }
+  pull_request:
+    - stages:
+        - name: notify feishu
+          image: cnbcool/webhook
+          settings:
+            urls:
+              - https://open.feishu.cn/open-apis/bot/v2/hook/ee30af3c-9ddf-4010-99f5-20dd3ad35f46
+            method: POST
+            content_type: application/json
+            ignoreProcessFailures: true
+            template: |
+              {
+                "msg_type": "interactive",
+                "card": {
+                  "config": { "wide_screen_mode": true },
+                  "header": {
+                    "title": { "tag": "plain_text", "content": "key-agent · PR 更新" },
+                    "template": "orange"
+                  },
+                  "elements": [
+                    { "tag": "div", "fields": [
+                      { "is_short": true, "text": { "tag": "lark_md", "content": "**事件**\n{{ CNB_EVENT }}" } },
+                      { "is_short": true, "text": { "tag": "lark_md", "content": "**PR**\n#{{ CNB_PULL_REQUEST_IID }} {{ CNB_PULL_REQUEST_TITLE }}" } },
+                      { "is_short": true, "text": { "tag": "lark_md", "content": "**来源分支**\n{{ CNB_PULL_REQUEST_BRANCH }}" } },
+                      { "is_short": true, "text": { "tag": "lark_md", "content": "**提交**\n{{ CNB_COMMIT_SHORT }}" } }
+                    ]},
+                    { "tag": "div", "text": { "tag": "lark_md", "content": "**最新提交**\n{{ CNB_COMMIT_MESSAGE_TITLE }}" } },
+                    { "tag": "action", "actions": [
+                      { "tag": "button", "text": { "tag": "plain_text", "content": "查看 PR" },
+                        "url": "{{ CNB_REPO_URL_HTTPS }}/pull/{{ CNB_PULL_REQUEST_IID }}", "type": "primary" }
+                    ]}
+                  ]
+                }
+              }
