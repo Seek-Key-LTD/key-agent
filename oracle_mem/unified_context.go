@@ -9,7 +9,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"os"
 	"time"
 
 	_ "github.com/sijms/go-ora/v2"
@@ -45,9 +44,9 @@ type UnifiedContextManager struct {
 }
 
 // NewUnifiedContextManager initializes connection to Oracle ADB 26ai Lake 5
-// via the flavor-appropriate secret provider (host=Vault, guest=Infisical).
+// via the flavor-appropriate secret provider (selected by internal/secrets).
 func NewUnifiedContextManager() (*UnifiedContextManager, error) {
-	provider, err := secrets.ForFlavor(os.Getenv("VAULT_ADDR"))
+	provider, err := secrets.ForFlavor()
 	if err != nil {
 		return nil, fmt.Errorf("secret provider unavailable: %w", err)
 	}

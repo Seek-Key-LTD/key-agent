@@ -128,29 +128,29 @@ func NewStaticExtendedAgentCardHandler(card *ExtendedAgentCard) http.Handler {
 	})
 }
 
-// LoadASNCardFields 按 flavor 读取 agentcard（soul_name/evm_address/constellation_house）：
-// host 走 Vault，guest 走 Infisical（见 internal/secrets）。
-// 并从 Consul KV 读取 coherence（其他 agent 对本 agent 的称呼昵称，仅 host flavor）。
+// LoadASNCardFields 按生效 flavor 读取 agentcard（soul_name/evm_address/constellation_house）：
+// 凭据面 Provider 由 internal/secrets 按构建产物决定（guest 产物只有 Infisical）。
+// 并从 Consul KV 读取 coherence（其他 agent 对本 agent 的称呼昵称，仅 host 形态）。
 // 任一来源失败时降级为空值，不阻塞 AgentCard 输出。
-func LoadASNCardFields(vaultAddr, agentName string) (soulName, evmAddr, constellation string, coherence map[string]string) {
+func LoadASNCardFields(agentName string) (soulName, evmAddr, constellation string, coherence map[string]string) {
 	coherence = map[string]string{}
 	if agentName == "" {
 		return
 	}
 
 	// 1. 凭据面读取: <mount>/dev/agentcard/<agentName>
-	if p, err := secrets.ForFlavor(vaultAddr); err == nil {
+	if p, err := secrets.ForFlavor(); err == nil {
 		if m, err := p.Get(context.Background(), "dev/agentcard/"+agentName); err == nil {
 			soulName = m["soul_name"]
 			evmAddr = m["evm_address"]
 			constellation = m["constellation_house"]
 		}
-	} else if os.Getenv("KEYAGENT_FLAVOR") == secrets.FlavorGuest {
+	} else if secrets.Flavor() == secrets.FlavorGuest {
 		log.Printf("atoa: guest secret provider unavailable: %v (agentcard degraded to empty)", err)
 	}
 
 	// 2. Consul KV: coherence/<from>/<agentName> — 收集所有 agent 对本 agent 的昵称（host-only）
-	if os.Getenv("KEYAGENT_FLAVOR") == secrets.FlavorGuest {
+	if secrets.Flavor() == secrets.FlavorGuest {
 		return
 	}
 	consulAddr := os.Getenv("CONSUL_ADDR")

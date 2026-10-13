@@ -15,16 +15,15 @@ import (
 	"google.golang.org/adk/v2/messaging"
 )
 
-// DispatcherService handles Gitea webhook triggers, Vault/Authentik auth, Oracle Memory, Matrix Pager & Calendar locking
+// DispatcherService handles Gitea webhook triggers, Authentik auth, Oracle Memory, Matrix Pager & Calendar locking
 type DispatcherService struct {
 	AuthentikURL string
-	VaultAddr    string
 	OracleStore  *memory.OracleMemoryStore
 	MatrixClient *messaging.MatrixClient
 }
 
 // NewDispatcherService initializes a new DispatcherService instance
-func NewDispatcherService(authentikURL, vaultAddr string) *DispatcherService {
+func NewDispatcherService(authentikURL string) *DispatcherService {
 	// Initialize Pure Go Oracle Memory Store (HAProxy SSL Bridge on 11522 / lake2)
 	oracleStore, _ := memory.NewOracleMemoryStore(memory.OracleADBConfig{
 		HAProxyHost: "192.168.31.111",
@@ -43,7 +42,6 @@ func NewDispatcherService(authentikURL, vaultAddr string) *DispatcherService {
 
 	return &DispatcherService{
 		AuthentikURL: authentikURL,
-		VaultAddr:    vaultAddr,
 		OracleStore:  oracleStore,
 		MatrixClient: matrixClient,
 	}

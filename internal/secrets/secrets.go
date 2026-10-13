@@ -1,8 +1,10 @@
-// Package secrets 提供 key-agent 的双 flavor 凭据面：
-//   host  —— 内网完整形态：Vault（含 vault-agent 本地 token）
-//   guest —— 外围形态：Infisical over 纯出站 HTTPS（machine identity universal auth）
+// Package secrets 提供 key-agent 的双 flavor 凭据面。产物按 Go build tag 物理分包：
+//   host  —— 默认 `go build`：包含平台凭据 Provider（platform_host.go / vault.go）
+//   guest —— `go build -tags guest`：二进制内不含平台 Provider 的任何代码与字符串，
+//   仅走 Infisical 纯出站 HTTPS（machine identity universal auth）。
 //
-// 选路：环境变量 KEYAGENT_FLAVOR=host|guest（默认 host）。
+// flavor 选择：进程 env KEYAGENT_FLAVOR 优先，其次 /etc/keyagent/config.json 的
+// flavor 字段（launcher 注入），都未设置时取构建默认（host 构建=host，guest 构建=guest）。
 package secrets
 
 import (
@@ -17,35 +19,35 @@ type Provider interface {
 	Get(ctx context.Context, path string) (map[string]string, error)
 }
 
-// 两侧默认端点（约定真相源：repo wiki「Key-Agent-Predefines」§2）。
+// 端点默认值（约定真相源：repo wiki「Key-Agent-Predefines」§2）。
 const (
-	DefaultVaultAddr    = "https://vault.capitaltrain.cn"
-	DefaultInfisicalURL = "https://infisical.git4ta.fun"
+	DefaultInfisicalURL = "https://infisical.capitaltrain.cn"
 
 	FlavorHost  = "host"
 	FlavorGuest = "guest"
 )
 
 // ForFlavor 按当前 flavor 构造 Provider。
-func ForFlavor(vaultAddr string) (Provider, error) {
-	switch flavor() {
+func ForFlavor() (Provider, error) {
+	switch Flavor() {
 	case FlavorGuest:
 		return NewInfisicalFromEnv()
 	default:
-		return NewVault(vaultAddr)
+		return newPlatformProvider()
 	}
 }
 
-func flavor() string {
+// Flavor 返回生效 flavor。
+func Flavor() string {
 	f := os.Getenv("KEYAGENT_FLAVOR")
 	if f == "" {
-		return FlavorHost
+		return defaultFlavor
 	}
 	return f
 }
 
 func Get(path string) (map[string]string, error) {
-	p, err := ForFlavor(os.Getenv("VAULT_ADDR"))
+	p, err := ForFlavor()
 	if err != nil {
 		return nil, err
 	}

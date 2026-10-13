@@ -14,7 +14,7 @@ on:
 # go-builder (CT131) 已配 oca alias，可 mc 直推教育网 S3；:host 执行器以 root 跑，读 /root/.mc
 jobs:
   build-and-publish:
-    name: Cross-build 5-Arch & Publish 10 Packages to OCA S3
+    name: Cross-build 5-Arch x 2-Flavor & Publish to OCA S3
     runs-on: go-builder
     steps:
       - name: Checkout (内网 Gitea clone，避免 github.com 间歇不可达)
@@ -22,7 +22,7 @@ jobs:
           git clone --depth 1 --branch ${GITHUB_REF_NAME} \
             https://oauth2:${{ secrets.KAGENT_PKG_TOKEN }}@gitea.capitaltrain.cn/seekkey/key-agent.git .
 
-      - name: Cross-compile 5 target architectures
+      - name: Cross-compile 5 target architectures x host/guest 双产物
         run: |
           set -euo pipefail
           echo "🚀 [go-builder] $(go version)"
@@ -30,15 +30,29 @@ jobs:
           export GOPROXY="https://goproxy.cn,direct" CGO_ENABLED=0 GOWORK=off
           mkdir -p dist
           # 5 部署架构（linux amd64/arm64/armv7 + darwin arm64/amd64）；windows 无 Nomad 节点，不产
-          GOOS=linux   GOARCH=amd64          go build -trimpath -ldflags '-s -w' -o dist/k-agent-linux-amd64   ./cmd/agent_dispatcher
-          GOOS=linux   GOARCH=arm64          go build -trimpath -ldflags '-s -w' -o dist/k-agent-linux-arm64   ./cmd/agent_dispatcher
-          GOOS=linux   GOARCH=arm  GOARM=7   go build -trimpath -ldflags '-s -w' -o dist/k-agent-linux-armv7   ./cmd/agent_dispatcher
-          GOOS=darwin  GOARCH=arm64          go build -trimpath -ldflags '-s -w' -o dist/k-agent-darwin-arm64  ./cmd/agent_dispatcher
-          GOOS=darwin  GOARCH=amd64          go build -trimpath -ldflags '-s -w' -o dist/k-agent-darwin-amd64  ./cmd/agent_dispatcher
+          # host 产物沿用旧文件名（Nomad 调度兼容）；guest 产物统一 k-agent-guest- 前缀
+          GOOS=linux   GOARCH=amd64          go build -trimpath -ldflags '-s -w'                 -o dist/k-agent-linux-amd64   ./cmd/agent_dispatcher
+          GOOS=linux   GOARCH=arm64          go build -trimpath -ldflags '-s -w'                 -o dist/k-agent-linux-arm64   ./cmd/agent_dispatcher
+          GOOS=linux   GOARCH=arm  GOARM=7   go build -trimpath -ldflags '-s -w'                 -o dist/k-agent-linux-armv7   ./cmd/agent_dispatcher
+          GOOS=darwin  GOARCH=arm64          go build -trimpath -ldflags '-s -w'                 -o dist/k-agent-darwin-arm64  ./cmd/agent_dispatcher
+          GOOS=darwin  GOARCH=amd64          go build -trimpath -ldflags '-s -w'                 -o dist/k-agent-darwin-amd64  ./cmd/agent_dispatcher
+          GOOS=linux   GOARCH=amd64          go build -trimpath -ldflags '-s -w' -tags guest     -o dist/k-agent-guest-linux-amd64   ./cmd/agent_dispatcher
+          GOOS=linux   GOARCH=arm64          go build -trimpath -ldflags '-s -w' -tags guest     -o dist/k-agent-guest-linux-arm64   ./cmd/agent_dispatcher
+          GOOS=linux   GOARCH=arm  GOARM=7   go build -trimpath -ldflags '-s -w' -tags guest     -o dist/k-agent-guest-linux-armv7   ./cmd/agent_dispatcher
+          GOOS=darwin  GOARCH=arm64          go build -trimpath -ldflags '-s -w' -tags guest     -o dist/k-agent-guest-darwin-arm64  ./cmd/agent_dispatcher
+          GOOS=darwin  GOARCH=amd64          go build -trimpath -ldflags '-s -w' -tags guest     -o dist/k-agent-guest-darwin-amd64  ./cmd/agent_dispatcher
+          # guest 纯度门禁：二进制内不得出现任何 vault 字样
+          for f in dist/k-agent-guest-*; do
+            if strings "$f" | grep -qi vault; then
+              echo "❌ guest 产物泄漏 vault 引用: $f"; exit 1
+            fi
+          done
+          echo "✓ guest 纯度校验通过（10 个 guest 二进制零 vault 引用）"
+          (cd dist && sha256sum k-agent-* > SHA256SUMS)
           ls -l dist/
-          echo "✓ 5 架构编译完成"
+          echo "✓ 5 架构 × host/guest 双产物编译完成"
 
-      - name: Publish 10 packages (5 arch × dev/prod) to 教育网 OCA S3
+      - name: Publish packages (5 arch x 2 flavor × dev/prod + SHA256SUMS) to 教育网 OCA S3
         run: |
           set -euo pipefail
           VERSION="${GITHUB_REF_NAME:-latest}"
@@ -57,7 +71,8 @@ jobs:
             done
             mc cp "$arch_bin" "${OCA}/versions/${VERSION}/${fname}"
           done
-          echo "✓ 已推送 dev+prod 双通道 + versions/${VERSION} 快照到教育网 S3"
+          mc cp dist/SHA256SUMS "${OCA}/versions/${VERSION}/SHA256SUMS"
+          echo "✓ 已推送 dev+prod 双通道 + versions/${VERSION} 快照（含 SHA256SUMS）到教育网 S3"
 
       - name: Verify S3 artifacts (SHA256 回读比对，防静默损坏)
         run: |
