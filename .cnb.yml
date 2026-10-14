@@ -181,8 +181,6 @@ main:
             sha256sum dist/k-agent-* | tee dist/SHA256SUMS
         - name: job2 upload to branch archive
           image: minio/mc
-          settings:
-            ignoreProcessFailures: true
           script: |
             set -euo pipefail
             DEST="oca/${OCA_BUCKET}/k-agent/feature/dual-flavor-secrets"
@@ -196,8 +194,6 @@ main:
             echo "✅ 已上传到 ${DEST}"
         - name: job3 verify sha256
           image: minio/mc
-          settings:
-            ignoreProcessFailures: true
           script: |
             set -euo pipefail
             DEST="oca/${OCA_BUCKET}/k-agent/feature/dual-flavor-secrets"
