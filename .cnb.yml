@@ -203,11 +203,7 @@ main:
               [ -f "$f" ] || continue
               fname=$(basename "$f")
               l=$(sha256sum "$f"); l=${l%% *}
-              if mc stat "${DEST}/${fname}" >/dev/null 2>&1; then
-                r=$(mc cat "${DEST}/${fname}" | sha256sum); r=${r%% *}
-              else
-                r="MISSING"
-              fi
+              r=$(mc cat "${DEST}/${fname}" | sha256sum); r=${r%% *}
               if [ "$l" = "$r" ]; then
                 echo "✅ ${fname}: ${l} 一致"; ok=$((ok+1))
               else
