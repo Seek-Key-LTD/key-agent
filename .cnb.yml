@@ -202,12 +202,16 @@ main:
             for f in dist/k-agent-*; do
               [ -f "$f" ] || continue
               fname=$(basename "$f")
-              l=$(sha256sum "$f" | awk '{print $1}')
-              r=$(mc cat "${DEST}/${fname}" 2>/dev/null | sha256sum | awk '{print $1}' || echo "MISSING")
-              if [ "$l" = "$r" ]; then
-                echo "✅ ${fname}: ${l:0:12}… 一致"; ok=$((ok+1))
+              l=$(sha256sum "$f"); l=${l%% *}
+              if mc stat "${DEST}/${fname}" >/dev/null 2>&1; then
+                r=$(mc cat "${DEST}/${fname}" | sha256sum); r=${r%% *}
               else
-                echo "❌ SHA256 MISMATCH ${fname}: local=${l:0:12} remote=${r:0:12}"; bad=$((bad+1))
+                r="MISSING"
+              fi
+              if [ "$l" = "$r" ]; then
+                echo "✅ ${fname}: ${l} 一致"; ok=$((ok+1))
+              else
+                echo "❌ SHA256 MISMATCH ${fname}: local=${l} remote=${r}"; bad=$((bad+1))
               fi
             done
             echo "结果: ${ok} 一致 / ${bad} 不一致"
