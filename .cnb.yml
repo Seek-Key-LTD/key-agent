@@ -185,7 +185,7 @@ main:
             set -euo pipefail
             DEST="oca/${OCA_BUCKET}/k-agent/feature/dual-flavor-secrets"
             mc alias set oca "$OCA_ENDPOINT" "$OCA_ACCESS_KEY" "$OCA_SECRET_KEY"
-            mc mkdir -p "$DEST"
+            # minio/mc:latest 已移除 mc mkdir；S3 无真实目录，mc cp 到前缀自动成形
             for f in dist/k-agent-*; do
               [ -f "$f" ] || continue
               mc cp "$f" "${DEST}/"
