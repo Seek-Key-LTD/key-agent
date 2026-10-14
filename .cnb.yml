@@ -136,10 +136,12 @@ main:
                 }
               }
 
-# ── 白嫖制度：feature 分支构建（纯 verify-only，不碰 dev/prod）──────────
-# stages 与 cnb-release.yml 同款（job0 探针 → job1 双产物十进制编译+guest
-# 纯度门禁 → job2 上传 cnbverify/<commit> → job3 SHA256 回读）。
-# 取回：mc cp cernet/21579-lhhq-164014/k-agent/cnbverify/<CNB_COMMIT_SHORT>/
+# ── 白嫖制度：feature 分支构建（当前口径：主推 guest，只 linux/amd64）──
+# host 工程量大，之后再说；现在不推其他 flavor / 其他架构。
+# 产物归档在「分支名」通道下 —— 就是这个名字，不再引入 dev/prod/cnbverify/<sha> 等别名：
+#   oca/${OCA_BUCKET}/k-agent/feature/dual-flavor-secrets/
+# 取回：mc cp cernet/21579-lhhq-164014/k-agent/feature/dual-flavor-secrets/
+# job1 guest amd64 编译+纯度门禁 → job2 上传分支通道 → job3 SHA256 回读。
 "feature/*":
   push:
     - imports:
@@ -160,34 +162,30 @@ main:
               fi
             done
             [ "$fail" -eq 0 ] || { echo "凭据未就绪，终止流水线（检查 cnbvault/env.yml 与 allow_slugs）"; exit 1; }
-        - name: job1 cross-compile 5 arches × 2 flavors
+        - name: job1 build guest linux/amd64
           image: golang:1.26
           script: |
             set -euo pipefail
             go version
             export GOPROXY="https://goproxy.cn,direct" CGO_ENABLED=0 GOWORK=off
             mkdir -p dist
-            for arch in linux-amd64 linux-arm64 linux-armv7 darwin-arm64 darwin-amd64; do
-              GOOS=${arch%%-*} GOARCH=${arch##*-} \
-                go build -trimpath -ldflags '-s -w' -o dist/k-agent-${arch} ./cmd/agent_dispatcher
-              GOOS=${arch%%-*} GOARCH=${arch##*-} \
-                go build -trimpath -ldflags '-s -w' -tags guest -o dist/k-agent-guest-${arch} ./cmd/agent_dispatcher
-            done
-            for f in dist/k-agent-guest-*; do
-              if strings "$f" | grep -qi vault; then
-                echo "❌ ${f} 含 vault 字符串，guest 纯度失败"; exit 1
-              fi
-              echo "✅ ${f} 无 vault 残留"
-            done
+            # 只主推 guest；host 之后再说。只要 linux/amd64。
+            GOOS=linux GOARCH=amd64 \
+              go build -trimpath -ldflags '-s -w' -tags guest -o dist/k-agent-guest-linux-amd64 ./cmd/agent_dispatcher
+            # guest 纯度门禁：二进制里绝不能残留 vault 字符串
+            if strings dist/k-agent-guest-linux-amd64 | grep -qi vault; then
+              echo "❌ k-agent-guest-linux-amd64 含 vault 字符串，guest 纯度失败"; exit 1
+            fi
+            echo "✅ k-agent-guest-linux-amd64 无 vault 残留"
             ls -l dist/
             sha256sum dist/k-agent-* | tee dist/SHA256SUMS
-        - name: job2 upload cnbverify (feature)
+        - name: job2 upload to branch archive
           image: minio/mc
           settings:
             ignoreProcessFailures: true
           script: |
             set -euo pipefail
-            DEST="oca/${OCA_BUCKET}/k-agent/cnbverify/${CNB_COMMIT_SHORT}"
+            DEST="oca/${OCA_BUCKET}/k-agent/feature/dual-flavor-secrets"
             mc alias set oca "$OCA_ENDPOINT" "$OCA_ACCESS_KEY" "$OCA_SECRET_KEY"
             mc mkdir -p "$DEST"
             for f in dist/k-agent-*; do
@@ -196,13 +194,13 @@ main:
             done
             mc cp dist/SHA256SUMS "${DEST}/" 2>/dev/null || true
             echo "✅ 已上传到 ${DEST}"
-        - name: job3 verify sha256 (feature)
+        - name: job3 verify sha256
           image: minio/mc
           settings:
             ignoreProcessFailures: true
           script: |
             set -euo pipefail
-            DEST="oca/${OCA_BUCKET}/k-agent/cnbverify/${CNB_COMMIT_SHORT}"
+            DEST="oca/${OCA_BUCKET}/k-agent/feature/dual-flavor-secrets"
             mc alias set oca "$OCA_ENDPOINT" "$OCA_ACCESS_KEY" "$OCA_SECRET_KEY"
             ok=0; bad=0
             for f in dist/k-agent-*; do
