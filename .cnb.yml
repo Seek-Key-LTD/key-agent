@@ -26,7 +26,8 @@ $:
         - name: upload release attachments
           image: cnbcool/attachments:latest
           settings:
-            files:
+            tag: ${CNB_BRANCH}
+            attachments:
               - dist/k-agent-guest-linux-amd64.tar.gz
     - docker:
         image: cnbcool/codewiki:latest
