@@ -17,8 +17,17 @@ $:
             - mkdir -p dist
             - go build -trimpath -ldflags '-s -w' -o dist/k-agent-guest-linux-amd64 ./cmd/agent_dispatcher
             - ./dist/k-agent-guest-linux-amd64 --version
-          exports:
-            - dist/k-agent-guest-linux-amd64
+            - tar -czf dist/k-agent-guest-linux-amd64.tar.gz -C dist k-agent-guest-linux-amd64
+        - name: git release
+          type: git:release
+          options:
+            tag: ${CNB_BRANCH}
+            description: "KeyAgent Guest (linux-amd64) 独立发布版"
+        - name: upload release attachments
+          image: cnbcool/attachments:latest
+          settings:
+            files:
+              - dist/k-agent-guest-linux-amd64.tar.gz
     - docker:
         image: cnbcool/codewiki:latest
       stages:
@@ -72,8 +81,6 @@ main:
             - go build -trimpath -ldflags '-s -w' -o dist/k-agent-guest-linux-amd64 ./cmd/agent_dispatcher
             - ./dist/k-agent-guest-linux-amd64 --version
             - ls -lh dist/
-          exports:
-            - dist/k-agent-guest-linux-amd64
         - name: notify feishu
           image: cnbcool/webhook
           settings:
