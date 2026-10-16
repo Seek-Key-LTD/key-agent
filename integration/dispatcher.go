@@ -9,6 +9,8 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
+	"strconv"
 	"time"
 
 	"google.golang.org/adk/v2/memory"
@@ -27,11 +29,29 @@ type DispatcherService struct {
 // NewDispatcherService initializes a new DispatcherService instance
 func NewDispatcherService(authentikURL, vaultAddr string) *DispatcherService {
 	// Initialize Pure Go MySQL Memory Store for Guest mode (River1 via PVE HAProxy :33061)
-	mysqlHost := "192.168.31.77"
+	mysqlHost := os.Getenv("MYSQL_HOST")
+	if mysqlHost == "" {
+		mysqlHost = "192.168.31.77"
+	}
 	mysqlPort := 33061
-	mysqlUser := "root"
-	mysqlPass := "placeholder_pass"
-	mysqlDB := "keyagent"
+	if pStr := os.Getenv("MYSQL_PORT"); pStr != "" {
+		if p, err := strconv.Atoi(pStr); err == nil {
+			mysqlPort = p
+		}
+	}
+	mysqlUser := os.Getenv("MYSQL_USER")
+	if mysqlUser == "" {
+		mysqlUser = "root"
+	}
+	mysqlPass := os.Getenv("MYSQL_PASSWORD")
+	if mysqlPass == "" {
+		mysqlPass = "placeholder_pass"
+	}
+	mysqlDB := os.Getenv("MYSQL_DATABASE")
+	if mysqlDB == "" {
+		mysqlDB = "keyagent"
+	}
+	mysqlDSN := os.Getenv("MYSQL_DSN")
 
 	mysqlStore, _ := memory.NewMySQLMemoryStore(memory.MySQLConfig{
 		Host:     mysqlHost,
@@ -39,6 +59,7 @@ func NewDispatcherService(authentikURL, vaultAddr string) *DispatcherService {
 		Database: mysqlDB,
 		User:     mysqlUser,
 		Password: mysqlPass,
+		DSN:      mysqlDSN,
 	})
 
 	// Legacy Oracle Memory Store fallback (Lake2 ATP on 11522)
