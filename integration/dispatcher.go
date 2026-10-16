@@ -15,19 +15,35 @@ import (
 	"google.golang.org/adk/v2/messaging"
 )
 
-// DispatcherService handles Gitea webhook triggers, Vault/Authentik auth, Oracle Memory, Matrix Pager & Calendar locking
+// DispatcherService handles Gitea webhook triggers, Vault/Authentik auth, MySQL/Oracle Memory, Matrix Pager & Calendar locking
 type DispatcherService struct {
 	AuthentikURL string
 	VaultAddr    string
+	MySQLStore   *memory.MySQLMemoryStore
 	OracleStore  *memory.OracleMemoryStore
 	MatrixClient *messaging.MatrixClient
 }
 
 // NewDispatcherService initializes a new DispatcherService instance
 func NewDispatcherService(authentikURL, vaultAddr string) *DispatcherService {
-	// Initialize Pure Go Oracle Memory Store (HAProxy SSL Bridge on 11522 / lake2)
+	// Initialize Pure Go MySQL Memory Store for Guest mode (River1 via PVE HAProxy :33061)
+	mysqlHost := "192.168.31.77"
+	mysqlPort := 33061
+	mysqlUser := "root"
+	mysqlPass := "placeholder_pass"
+	mysqlDB := "keyagent"
+
+	mysqlStore, _ := memory.NewMySQLMemoryStore(memory.MySQLConfig{
+		Host:     mysqlHost,
+		Port:     mysqlPort,
+		Database: mysqlDB,
+		User:     mysqlUser,
+		Password: mysqlPass,
+	})
+
+	// Legacy Oracle Memory Store fallback (Lake2 ATP on 11522)
 	oracleStore, _ := memory.NewOracleMemoryStore(memory.OracleADBConfig{
-		HAProxyHost: "192.168.31.111",
+		HAProxyHost: "192.168.31.77",
 		Port:        11522,
 		ServiceName: "g8dfe5cebce8245_lake2_medium.adb.oraclecloud.com",
 		User:        "ADMIN",
@@ -44,6 +60,7 @@ func NewDispatcherService(authentikURL, vaultAddr string) *DispatcherService {
 	return &DispatcherService{
 		AuthentikURL: authentikURL,
 		VaultAddr:    vaultAddr,
+		MySQLStore:   mysqlStore,
 		OracleStore:  oracleStore,
 		MatrixClient: matrixClient,
 	}
@@ -85,17 +102,21 @@ func (s *DispatcherService) HandleGiteaWebhook(ctx context.Context, r *http.Requ
 	log.Printf("[Dispatcher] Received Task Assignment for Agent [%s] from Gitea (Issue #%d: '%s')",
 		targetAgent, payload.Issue.Number, payload.Issue.Title)
 
-	// 3. Log to Pure Go Oracle ADB 26ai Memory Bank (Private Context & Vector Memory)
-	if s.OracleStore != nil {
-		memRec := memory.MemoryRecord{
-			ID:         fmt.Sprintf("mem-gitea-%d", payload.Issue.Number),
-			AgentID:    targetAgent,
-			MemoryText: fmt.Sprintf("Gitea Task #%d assigned: '%s'. Duration: %v", payload.Issue.Number, payload.Issue.Title, duration),
-			CreatedAt:  time.Now(),
-		}
-		_ = s.OracleStore.SaveMemory(ctx, memRec)
+	// 3. Log to Memory Bank (Prioritize MySQL for Guest mode, fallback to Oracle ADB)
+	memRec := memory.MemoryRecord{
+		ID:         fmt.Sprintf("mem-gitea-%d", payload.Issue.Number),
+		AgentID:    targetAgent,
+		MemoryText: fmt.Sprintf("Gitea Task #%d assigned: '%s'. Duration: %v", payload.Issue.Number, payload.Issue.Title, duration),
+		CreatedAt:  time.Now(),
 	}
-	log.Printf("[Memory Bank] Synced Task Metadata to Pure Go Oracle ADB 26ai (Zero CGO / C-lib)")
+
+	if s.MySQLStore != nil {
+		_ = s.MySQLStore.SaveMemory(ctx, memRec)
+		log.Printf("[Memory Bank] Synced Task Metadata to MySQL River1 (Guest Mode)")
+	} else if s.OracleStore != nil {
+		_ = s.OracleStore.SaveMemory(ctx, memRec)
+		log.Printf("[Memory Bank] Synced Task Metadata to Pure Go Oracle ADB 26ai (Host Fallback)")
+	}
 
 	// 4. Send Matrix Unified Communications Pager Message & Reaction (m.reaction)
 	var matrixEvtID, reactID string

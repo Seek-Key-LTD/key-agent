@@ -118,7 +118,7 @@ func main() {
 	for i := 1; i < len(os.Args); i++ {
 		arg := os.Args[i]
 		if arg == "version" || arg == "-v" || arg == "--version" {
-			fmt.Println("KeyAgent v2.4.0-matrix-mastodon (ADK-Go core)")
+			fmt.Println("KeyAgent v2.5.0-guest (ADK-Go core - Guest MySQL Edition)")
 			return
 		}
 		if arg == "--config" && i+1 < len(os.Args) {

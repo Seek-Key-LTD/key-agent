@@ -40,7 +40,9 @@ require (
 require github.com/hashicorp/golang-lru/v2 v2.0.7
 
 require (
+	filippo.io/edwards25519 v1.2.0 // indirect
 	github.com/coder/websocket v1.8.15 // indirect
+	github.com/go-sql-driver/mysql v1.10.1 // indirect
 	github.com/kr/text v0.2.0 // indirect
 	github.com/ncruces/go-strftime v1.0.0 // indirect
 	github.com/sijms/go-ora/v2 v2.9.0 // indirect

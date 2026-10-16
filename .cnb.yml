@@ -1,28 +1,24 @@
 # key-agent CNB 配置
-#
-# 目的：在 CNB 上启用「知识库 + NPC + Code Wiki + 构建飞书通知」四项 AI/可观测能力，
-#使其成为 ASN 语料的可检索入口，并让每次构建都飞书可见。
-# 参考 hello-cnb 实战（8/8 全绿配方）：知识库由 knowledge:update 事件被动配出，
-# swagger 中并无「创建知识库」接口，故必须有此事件声明。
-# Code Wiki：打 tag 触发 cnbcool/codewiki 插件自动生成代码维基（也可在 Issue/PR
-# 评论区召唤 @npc/codewiki(codewiki) 生成codewiki）。
-#
-# 飞书通知（2026-10-09 接入）：
-#   事件     push / pull_request / tag_push —— 覆盖构建、PR、Code Wiki 三类
-#   接收端   飞书自定义机器人（卡片消息）
-#   安全     机器人侧已关闭「签名校验」，故本文件不含任何 secret
-#   ⚠️ 已知限制：CNB 的 cnbcool/webhook 插件签名算法是 HMAC-SHA256(body, key)，
-#      与飞书要求的 HMAC-SHA256(timestamp + "\n" + secret, key) **不等价**。
-#      即保留飞书签名校验无法用原生插件实现，只能关闭。URL 本身即凭证，
-#      它明文存在于本文件中（等同密钥入版本库），属已知取舍。
+# 专为 KeyAgent Guest (客卿模式) 构建 linux-amd64 单一目标产物
+# 核心特征：无 TUN/HCP 依赖，记忆后端切为 MySQL (River1)，轻装上阵
+# 包含：AMD64 编译构建 + 飞书通知 + Code Wiki
 
 $:
   knowledge:update:
     - stages:
         - name: index-repo-knowledge
-          # 未配置知识库时会 404（KnowledgeBase Not Found），不阻塞整条流水线
           ignoreProcessFailures: true
   tag_push:
+    - stages:
+        - name: Release Guest AMD64
+          image: golang:1.26
+          script:
+            - export GOPROXY="https://goproxy.cn,direct" CGO_ENABLED=0 GOWORK=off
+            - mkdir -p dist
+            - go build -trimpath -ldflags '-s -w' -o dist/k-agent-guest-linux-amd64 ./cmd/agent_dispatcher
+            - ./dist/k-agent-guest-linux-amd64 --version
+          exports:
+            - dist/k-agent-guest-linux-amd64
     - docker:
         image: cnbcool/codewiki:latest
       stages:
@@ -39,7 +35,6 @@ $:
               - https://open.feishu.cn/open-apis/bot/v2/hook/ee30af3c-9ddf-4010-99f5-20dd3ad35f46
             method: POST
             content_type: application/json
-            # 通知失败不阻塞业务流水线（Code Wiki 生成成功才是要紧的）
             ignoreProcessFailures: true
             template: |
               {
@@ -47,7 +42,7 @@ $:
                 "card": {
                   "config": { "wide_screen_mode": true },
                   "header": {
-                    "title": { "tag": "plain_text", "content": "key-agent · Tag 触发 Code Wiki" },
+                    "title": { "tag": "plain_text", "content": "key-agent · Tag 触发 Release & Code Wiki" },
                     "template": "green"
                   },
                   "elements": [
@@ -69,6 +64,16 @@ $:
 main:
   push:
     - stages:
+        - name: 编译 Guest AMD64 二进制
+          image: golang:1.26
+          script:
+            - export GOPROXY="https://goproxy.cn,direct" CGO_ENABLED=0 GOWORK=off
+            - mkdir -p dist
+            - go build -trimpath -ldflags '-s -w' -o dist/k-agent-guest-linux-amd64 ./cmd/agent_dispatcher
+            - ./dist/k-agent-guest-linux-amd64 --version
+            - ls -lh dist/
+          exports:
+            - dist/k-agent-guest-linux-amd64
         - name: notify feishu
           image: cnbcool/webhook
           settings:
@@ -83,7 +88,7 @@ main:
                 "card": {
                   "config": { "wide_screen_mode": true },
                   "header": {
-                    "title": { "tag": "plain_text", "content": "key-agent · 代码推送" },
+                    "title": { "tag": "plain_text", "content": "key-agent Guest (AMD64) · 代码构建" },
                     "template": "blue"
                   },
                   "elements": [
