@@ -86,6 +86,8 @@ func fileExists(p string) bool {
 	return err == nil
 }
 
+var Version = "v2.5.1-host"
+
 func main() {
 	// 0. Handle native Feishu subcommands (e.g. k-agent feishu im-send ...)
 	if len(os.Args) > 1 && os.Args[1] == "feishu" {
@@ -99,7 +101,7 @@ func main() {
 	for i := 1; i < len(os.Args); i++ {
 		arg := os.Args[i]
 		if arg == "version" || arg == "-v" || arg == "--version" {
-			fmt.Println("KeyAgent v2.5.1-guest (ADK-Go core - Decoupled Guest Edition)")
+			fmt.Printf("KeyAgent %s (ADK-Go core - Host Edition with Vault & HAProxy Memory Hub)\n", Version)
 			return
 		}
 		if arg == "--config" && i+1 < len(os.Args) {

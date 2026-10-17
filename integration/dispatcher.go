@@ -28,11 +28,17 @@ type DispatcherService struct {
 
 // NewDispatcherService initializes a new DispatcherService instance
 func NewDispatcherService(authentikURL, vaultAddr string) *DispatcherService {
-	// Initialize Pure Go MySQL Memory Store for Guest mode if configured in environment
+	// Initialize Pure Go MySQL Memory Store for Memory Hub (River1 via PVE HAProxy :33061)
 	var mysqlStore *memory.MySQLMemoryStore
 	mysqlHost := os.Getenv("MYSQL_HOST")
+	if mysqlHost == "" {
+		mysqlHost = "100.93.5.81"
+	}
 	mysqlDSN := os.Getenv("MYSQL_DSN")
 	mysqlUser := os.Getenv("MYSQL_USER")
+	if mysqlUser == "" {
+		mysqlUser = "keyagent_app"
+	}
 	mysqlPass := os.Getenv("MYSQL_PASSWORD")
 	mysqlDB := os.Getenv("MYSQL_DATABASE")
 	if mysqlDB == "" {
@@ -55,12 +61,13 @@ func NewDispatcherService(authentikURL, vaultAddr string) *DispatcherService {
 			DSN:      mysqlDSN,
 		})
 		if err != nil {
-			log.Printf("[Guest Memory] ⚠️ Failed to initialize MySQL store: %v", err)
+			log.Printf("[Memory Hub] ⚠️ Failed to initialize MySQL store: %v", err)
 		} else {
 			mysqlStore = store
+			log.Printf("[Memory Hub] ✅ MySQL memory hub connected to %s:%d/%s", mysqlHost, mysqlPort, mysqlDB)
 		}
 	} else {
-		log.Printf("[Guest Memory] ⚪ MySQL memory store not configured in environment (set MYSQL_HOST/MYSQL_PASSWORD or MYSQL_DSN to enable)")
+		log.Printf("[Memory Hub] ⚪ MySQL memory store not configured (set MYSQL_PASSWORD or MYSQL_DSN to enable)")
 	}
 
 	// Oracle Memory Store fallback (only if ORACLE_HOST/ORACLE_USER/ORACLE_PASSWORD are explicitly configured)
