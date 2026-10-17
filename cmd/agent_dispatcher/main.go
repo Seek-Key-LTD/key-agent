@@ -101,7 +101,11 @@ func main() {
 	for i := 1; i < len(os.Args); i++ {
 		arg := os.Args[i]
 		if arg == "version" || arg == "-v" || arg == "--version" {
-			fmt.Printf("KeyAgent %s (ADK-Go core - Host Edition with Vault & HAProxy Memory Hub)\n", Version)
+			if strings.Contains(Version, "guest") {
+				fmt.Printf("KeyAgent %s (ADK-Go core - Decoupled Guest Edition)\n", Version)
+			} else {
+				fmt.Printf("KeyAgent %s (ADK-Go core - Host Edition with Vault & HAProxy Memory Hub)\n", Version)
+			}
 			return
 		}
 		if arg == "--config" && i+1 < len(os.Args) {
