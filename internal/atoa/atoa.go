@@ -135,8 +135,19 @@ func LoadASNCardFields(vaultAddr, agentName string) (soulName, evmAddr, constell
 		return
 	}
 
-	// 1. Vault: secret/dev/agentcard/<agentName>
-	if vaultAddr != "" {
+	// 0. Environment variables (injected by Infisical via Machine Identity) take highest priority
+	if v := os.Getenv("SOUL_NAME"); v != "" {
+		soulName = v
+	}
+	if v := os.Getenv("EVM_ADDRESS"); v != "" {
+		evmAddr = v
+	}
+	if v := os.Getenv("CONSTELLATION"); v != "" {
+		constellation = v
+	}
+
+	// 1. Vault fallback: secret/dev/agentcard/<agentName> (only if not supplied by env)
+	if vaultAddr != "" && (soulName == "" || evmAddr == "" || constellation == "") {
 		client := &http.Client{Timeout: 5 * time.Second}
 		token := readVaultToken()
 		if token != "" {

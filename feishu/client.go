@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"sync"
 	"time"
 )
@@ -39,6 +40,31 @@ func New(cfg Config) *Client {
 		cfg:  cfg,
 		http: &http.Client{Timeout: 30 * time.Second},
 	}
+}
+
+// NewFromEnv creates a Feishu client by reading credentials from environment variables:
+// FEISHU_APP_ID (or LARK_APP_ID) and FEISHU_APP_SECRET (or LARK_APP_SECRET).
+func NewFromEnv() (*Client, error) {
+	appID := os.Getenv("FEISHU_APP_ID")
+	if appID == "" {
+		appID = os.Getenv("LARK_APP_ID")
+	}
+	appSecret := os.Getenv("FEISHU_APP_SECRET")
+	if appSecret == "" {
+		appSecret = os.Getenv("LARK_APP_SECRET")
+	}
+	if appID == "" || appSecret == "" {
+		return nil, fmt.Errorf("feishu: missing FEISHU_APP_ID or FEISHU_APP_SECRET in environment")
+	}
+	return New(Config{
+		AppID:     appID,
+		AppSecret: appSecret,
+	}), nil
+}
+
+// AppID returns the configured AppID.
+func (c *Client) AppID() string {
+	return c.cfg.AppID
 }
 
 // tenantAccessTokenResponse is the response from the token endpoint.

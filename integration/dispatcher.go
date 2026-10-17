@@ -28,10 +28,15 @@ type DispatcherService struct {
 
 // NewDispatcherService initializes a new DispatcherService instance
 func NewDispatcherService(authentikURL, vaultAddr string) *DispatcherService {
-	// Initialize Pure Go MySQL Memory Store for Guest mode (River1 via PVE HAProxy :33061)
+	// Initialize Pure Go MySQL Memory Store for Guest mode if configured in environment
+	var mysqlStore *memory.MySQLMemoryStore
 	mysqlHost := os.Getenv("MYSQL_HOST")
-	if mysqlHost == "" {
-		mysqlHost = "192.168.31.77"
+	mysqlDSN := os.Getenv("MYSQL_DSN")
+	mysqlUser := os.Getenv("MYSQL_USER")
+	mysqlPass := os.Getenv("MYSQL_PASSWORD")
+	mysqlDB := os.Getenv("MYSQL_DATABASE")
+	if mysqlDB == "" {
+		mysqlDB = "keyagent"
 	}
 	mysqlPort := 33061
 	if pStr := os.Getenv("MYSQL_PORT"); pStr != "" {
@@ -39,44 +44,71 @@ func NewDispatcherService(authentikURL, vaultAddr string) *DispatcherService {
 			mysqlPort = p
 		}
 	}
-	mysqlUser := os.Getenv("MYSQL_USER")
-	if mysqlUser == "" {
-		mysqlUser = "root"
-	}
-	mysqlPass := os.Getenv("MYSQL_PASSWORD")
-	if mysqlPass == "" {
-		mysqlPass = "placeholder_pass"
-	}
-	mysqlDB := os.Getenv("MYSQL_DATABASE")
-	if mysqlDB == "" {
-		mysqlDB = "keyagent"
-	}
-	mysqlDSN := os.Getenv("MYSQL_DSN")
 
-	mysqlStore, _ := memory.NewMySQLMemoryStore(memory.MySQLConfig{
-		Host:     mysqlHost,
-		Port:     mysqlPort,
-		Database: mysqlDB,
-		User:     mysqlUser,
-		Password: mysqlPass,
-		DSN:      mysqlDSN,
-	})
+	if mysqlDSN != "" || (mysqlHost != "" && mysqlUser != "" && mysqlPass != "") {
+		store, err := memory.NewMySQLMemoryStore(memory.MySQLConfig{
+			Host:     mysqlHost,
+			Port:     mysqlPort,
+			Database: mysqlDB,
+			User:     mysqlUser,
+			Password: mysqlPass,
+			DSN:      mysqlDSN,
+		})
+		if err != nil {
+			log.Printf("[Guest Memory] ⚠️ Failed to initialize MySQL store: %v", err)
+		} else {
+			mysqlStore = store
+		}
+	} else {
+		log.Printf("[Guest Memory] ⚪ MySQL memory store not configured in environment (set MYSQL_HOST/MYSQL_PASSWORD or MYSQL_DSN to enable)")
+	}
 
-	// Legacy Oracle Memory Store fallback (Lake2 ATP on 11522)
-	oracleStore, _ := memory.NewOracleMemoryStore(memory.OracleADBConfig{
-		HAProxyHost: "192.168.31.77",
-		Port:        11522,
-		ServiceName: "g8dfe5cebce8245_lake2_medium.adb.oraclecloud.com",
-		User:        "ADMIN",
-		Password:    "placeholder_pass",
-	})
+	// Oracle Memory Store fallback (only if ORACLE_HOST/ORACLE_USER/ORACLE_PASSWORD are explicitly configured)
+	var oracleStore *memory.OracleMemoryStore
+	oracleHost := os.Getenv("ORACLE_HOST")
+	oracleUser := os.Getenv("ORACLE_USER")
+	oraclePass := os.Getenv("ORACLE_PASSWORD")
+	oracleService := os.Getenv("ORACLE_SERVICE_NAME")
+	if oracleHost != "" && oracleUser != "" && oraclePass != "" {
+		oraclePort := 11522
+		if pStr := os.Getenv("ORACLE_PORT"); pStr != "" {
+			if p, err := strconv.Atoi(pStr); err == nil {
+				oraclePort = p
+			}
+		}
+		if oracleService == "" {
+			oracleService = "g8dfe5cebce8245_lake2_medium.adb.oraclecloud.com"
+		}
+		store, err := memory.NewOracleMemoryStore(memory.OracleADBConfig{
+			HAProxyHost: oracleHost,
+			Port:        oraclePort,
+			ServiceName: oracleService,
+			User:        oracleUser,
+			Password:    oraclePass,
+		})
+		if err != nil {
+			log.Printf("[Oracle Memory] ⚠️ Failed to initialize Oracle store: %v", err)
+		} else {
+			oracleStore = store
+		}
+	} else {
+		log.Printf("[Oracle Memory] ⚪ Oracle memory store not configured in environment, skipping")
+	}
 
-	// Initialize Matrix Unified Communications & Reaction Client
-	matrixClient := messaging.NewMatrixClient(messaging.MatrixConfig{
-		HomeserverURL: "https://matrix.capitaltrain.cn",
-		AccessToken:   "syt_agent_bot_token",
-		DefaultRoomID: "!agent-ops:capitaltrain.cn",
-	})
+	// Matrix Unified Communications & Reaction Client
+	var matrixClient *messaging.MatrixClient
+	matrixToken := os.Getenv("MATRIX_TOKEN")
+	matrixServer := os.Getenv("MATRIX_HOMESERVER")
+	if matrixToken != "" {
+		if matrixServer == "" {
+			matrixServer = "https://matrix.capitaltrain.cn"
+		}
+		matrixClient = messaging.NewMatrixClient(messaging.MatrixConfig{
+			HomeserverURL: matrixServer,
+			AccessToken:   matrixToken,
+			DefaultRoomID: os.Getenv("MATRIX_ROOM_ID"),
+		})
+	}
 
 	return &DispatcherService{
 		AuthentikURL: authentikURL,
