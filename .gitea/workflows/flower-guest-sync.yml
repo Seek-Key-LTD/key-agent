@@ -1,0 +1,91 @@
+name: "Flower Guest Sync (File the Order & Fill the Gap)"
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_version:
+        description: "期望收敛的版本号 (Expected Version)"
+        required: true
+        default: "v2.5.1-guest"
+  release:
+    types: [published]
+
+jobs:
+  fulfill-order:
+    name: "Fulfill Order on ${{ matrix.node }}"
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - node: "onecloud1"
+            runner_tag: "onecloud1:host"
+            install_path: "/opt/keyagent/releases/production/k-agent"
+          - node: "onecloud2"
+            runner_tag: "onecloud2:host"
+            install_path: "/opt/keyagent/releases/production/k-agent"
+          - node: "ch1"
+            runner_tag: "ch1:host"
+            install_path: "/usr/local/bin/k-agent"
+          - node: "ch2"
+            runner_tag: "ch2:host"
+            install_path: "/usr/local/bin/k-agent"
+          - node: "ash1"
+            runner_tag: "ash1:host"
+            install_path: "/usr/local/bin/k-agent"
+          - node: "ash2"
+            runner_tag: "ash2:host"
+            install_path: "/usr/local/bin/k-agent"
+
+    runs-on: ["${{ matrix.runner_tag }}"]
+
+    steps:
+      - name: "1. 接收派单并识别节点环境"
+        run: |
+          echo "=== [Order Claimed] 节点: ${{ matrix.node }} ==="
+          echo "主机名: $(hostname)"
+          echo "硬件架构: $(uname -m)"
+          echo "期望状态版本: ${{ github.event.inputs.target_version || 'latest' }}"
+
+      - name: "2. 探测当前物理状态 (Current State)"
+        id: check_current
+        run: |
+          if [ -x "${{ matrix.install_path }}" ]; then
+            CURRENT_VER=$("${{ matrix.install_path }}" --version 2>&1 || echo "unknown")
+          else
+            CURRENT_VER="none"
+          fi
+          echo "current_version=$CURRENT_VER" >> $GITHUB_ENV
+          echo "当前版本: $CURRENT_VER"
+
+      - name: "3. 边缘拉取产物并填补差距 (Fill the Gap)"
+        run: |
+          RAW_ARCH=$(uname -m)
+          case "$RAW_ARCH" in
+            x86_64)  ARCH="amd64" ;;
+            armv7*|armhf) ARCH="armv7" ;;
+            aarch64) ARCH="arm64" ;;
+            *)       ARCH="amd64" ;;
+          esac
+
+          DIST_URL="https://minio-s3.capitaltrain.cn/dropbox/k-agent-guest-linux-${ARCH}"
+          TMP_BIN="/tmp/k-agent-guest-${ARCH}"
+
+          echo "从边缘存储拉取产物: ${DIST_URL}..."
+          curl -sSL "${DIST_URL}" -o "${TMP_BIN}"
+          chmod +x "${TMP_BIN}"
+
+          echo "执行原子替换: ${{ matrix.install_path }}..."
+          sudo install -m 755 "${TMP_BIN}" "${{ matrix.install_path }}"
+          rm -f "${TMP_BIN}"
+
+          echo "平滑重载 systemd 守护进程..."
+          sudo systemctl restart k-agent
+          sleep 2
+          sudo systemctl is-active k-agent
+
+      - name: "4. 验证收敛完成 (Verify Expected State)"
+        run: |
+          NEW_VER=$("${{ matrix.install_path }}" --version 2>&1)
+          echo "收敛后版本: $NEW_VER"
+          curl -s http://127.0.0.1:18790/status | jq .
+          echo "✅ 节点 ${{ matrix.node }} 状态已达到 Expected State！"
