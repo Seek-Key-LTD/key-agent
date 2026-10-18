@@ -19,11 +19,17 @@ import (
 
 // DispatcherService handles Gitea webhook triggers, Vault/Authentik auth, MySQL/Oracle Memory, Matrix Pager & Calendar locking
 type DispatcherService struct {
-	AuthentikURL string
-	VaultAddr    string
-	MySQLStore   *memory.MySQLMemoryStore
-	OracleStore  *memory.OracleMemoryStore
-	MatrixClient *messaging.MatrixClient
+	AuthentikURL   string
+	VaultAddr      string
+	MySQLStore     *memory.MySQLMemoryStore
+	OracleStore    *memory.OracleMemoryStore
+	MatrixClient   *messaging.MatrixClient
+	MastodonClient *messaging.MastodonClient
+}
+
+// SetMastodonClient sets the Mastodon client for social broadcasts
+func (s *DispatcherService) SetMastodonClient(client *messaging.MastodonClient) {
+	s.MastodonClient = client
 }
 
 // NewDispatcherService initializes a new DispatcherService instance
@@ -192,6 +198,19 @@ func (s *DispatcherService) HandleGiteaWebhook(ctx context.Context, r *http.Requ
 		// Send formal Email notice fallback
 		_ = s.MatrixClient.SendEmailNotice(ctx, fmt.Sprintf("%s@capitaltrain.cn", targetAgent),
 			fmt.Sprintf("Task Assignment #%d", payload.Issue.Number), pagerMsg)
+	}
+
+	// 4.1 Post Social Chill Toot to Mastodon (Reaction 计划)
+	if s.MastodonClient != nil {
+		chillMsg := fmt.Sprintf("☕ [%s 席位] 在 Gitea 接到新议题！\n📋 #%d: %s\n✨ 正在梳理思路制定计划，欢迎小伙伴随时交流~ 传送门: %s",
+			targetAgent, payload.Issue.Number, payload.Issue.Title, payload.Issue.HTMLURL)
+		go func(text string) {
+			if st, err := s.MastodonClient.PostStatus(context.Background(), text, "", "public"); err != nil {
+				log.Printf("[Mastodon Social] ⚠️ 发送接单茶话嘟文失败: %v", err)
+			} else {
+				log.Printf("[Mastodon Social] 🍹 成功在长毛象广场发布接单茶话嘟文 (ID: %s, URL: %s)", st.ID, st.URL)
+			}
+		}(chillMsg)
 	}
 
 	// 5. Lock Feishu Calendar Occupation Status

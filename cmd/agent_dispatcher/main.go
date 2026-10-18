@@ -241,6 +241,7 @@ func main() {
 			AccessToken: mastodonToken,
 			AgentName:   agentName,
 		})
+		dispatcher.SetMastodonClient(mastodonClient)
 		ctx := context.Background()
 		acc, err := mastodonClient.VerifyCredentials(ctx)
 		if err != nil {

@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"regexp"
 	"strconv"
 	"time"
@@ -54,6 +55,17 @@ func ParseGiteaWebhook(r *http.Request) (*GiteaIssuePayload, error) {
 		return nil, fmt.Errorf("empty request body")
 	}
 	defer r.Body.Close()
+
+	// 0. Verify Secret from environment variable (injected by Infisical/Systemd)
+	if expectedSecret := os.Getenv("GITEA_WEBHOOK_SECRET"); expectedSecret != "" {
+		token := r.Header.Get("X-Gitea-Token")
+		if token == "" {
+			token = r.Header.Get("X-Gitea-Signature")
+		}
+		if token != expectedSecret {
+			return nil, fmt.Errorf("unauthorized: invalid or missing X-Gitea-Token header")
+		}
+	}
 
 	bodyBytes, err := io.ReadAll(r.Body)
 	if err != nil {
