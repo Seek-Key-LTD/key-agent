@@ -257,6 +257,23 @@ func main() {
 					content = n.Status.Content
 				}
 				log.Printf("[Mastodon Comm] 🔔 Mention from @%s: %s (Notification ID: %s)", sender, content, n.ID)
+
+				// Auto-respond to Mention with host metrics (CPU / Memory)
+				if n.Status != nil && n.Account != nil && !n.Account.Bot {
+					replyTarget := n.Account.Acct
+					metrics := getSystemMetrics()
+					replyContent := fmt.Sprintf("@%s 报告！[%s 席位] 已捕获点名调度。\n📊 主机实时指标：\n• CPU 负载(1/5/15m): %s\n• 内存状态: %s / %s (已用 %s)",
+						replyTarget, agentName, metrics.LoadAvg, metrics.MemUsed, metrics.MemTotal, metrics.MemPercent)
+
+					go func(statusID, replyText string) {
+						time.Sleep(1 * time.Second)
+						if st, err := mastodonClient.PostStatus(context.Background(), replyText, statusID, "public"); err != nil {
+							log.Printf("[Mastodon Comm] ⚠️ Failed to auto-reply to mention %s: %v", statusID, err)
+						} else {
+							log.Printf("[Mastodon Comm] 📤 Auto-replied to @%s (Reply ID: %s, URL: %s)", replyTarget, st.ID, st.URL)
+						}
+					}(n.Status.ID, replyContent)
+				}
 			})
 		}
 	} else {
@@ -375,4 +392,50 @@ func main() {
 	if err := http.ListenAndServe(":"+port, mux); err != nil {
 		log.Fatalf("Daemon stopped unexpectedly: %v", err)
 	}
+}
+
+type SystemMetrics struct {
+	LoadAvg    string
+	MemUsed    string
+	MemTotal   string
+	MemPercent string
+}
+
+func getSystemMetrics() SystemMetrics {
+	metrics := SystemMetrics{
+		LoadAvg:    "N/A",
+		MemUsed:    "N/A",
+		MemTotal:   "N/A",
+		MemPercent: "N/A",
+	}
+
+	// 1. Load average from /proc/loadavg
+	if data, err := os.ReadFile("/proc/loadavg"); err == nil {
+		fields := strings.Fields(string(data))
+		if len(fields) >= 3 {
+			metrics.LoadAvg = fmt.Sprintf("%s, %s, %s", fields[0], fields[1], fields[2])
+		}
+	}
+
+	// 2. Memory from /proc/meminfo
+	if data, err := os.ReadFile("/proc/meminfo"); err == nil {
+		var totalKB, availKB float64
+		lines := strings.Split(string(data), "\n")
+		for _, line := range lines {
+			if strings.HasPrefix(line, "MemTotal:") {
+				fmt.Sscanf(line, "MemTotal: %f kB", &totalKB)
+			} else if strings.HasPrefix(line, "MemAvailable:") {
+				fmt.Sscanf(line, "MemAvailable: %f kB", &availKB)
+			}
+		}
+		if totalKB > 0 {
+			usedKB := totalKB - availKB
+			pct := (usedKB / totalKB) * 100
+			metrics.MemTotal = fmt.Sprintf("%.0fMB", totalKB/1024)
+			metrics.MemUsed = fmt.Sprintf("%.0fMB", usedKB/1024)
+			metrics.MemPercent = fmt.Sprintf("%.1f%%", pct)
+		}
+	}
+
+	return metrics
 }
