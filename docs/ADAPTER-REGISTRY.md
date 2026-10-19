@@ -62,6 +62,12 @@
 | `messaging/mastodon.go` (Mastodon AP Channel) | L2 | Mastodon ActivityPub | — | — | v1/v2 | `https://mastodon.capitaltrain.cn` |
 | Gitea webhook | L2 | Gitea | — | — | — | 走 A2A task handler，不另起 HTTP |
 
+### Agent 协议
+
+| 外挂名 | 类型 | 后端 | model_id | dimension | version | 出网目标 |
+|---|---|---|---|---|---|---|
+| `pkg/acp/`（Agent Client Protocol 客户端，供 L4 adapter 使用） | L4 支撑包 | 调用方提供的 ACP agent stdio / `io.ReadWriteCloser` | 由 agent 决定 | — | ACP v1 / JSON-RPC 2.0 | 无内置出网；不启动进程，由调用方管理传输与节点隔离 |
+
 ### 身份 / 分发
 
 | 外挂名 | 类型 | 后端 | model_id | dimension | version | 出网目标 |
