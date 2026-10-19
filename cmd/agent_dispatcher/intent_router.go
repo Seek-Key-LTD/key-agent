@@ -69,7 +69,7 @@ func ProcessMastodonMention(ctx context.Context, client *messaging.MastodonClien
 		replyVisibility = "direct" // Strict security constraint: NEVER leak OTP to public feed!
 		log.Printf("[Intent Router] 🔐 OTP Intent matched! Forcing visibility: direct for @%s", sender)
 
-		otpCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		otpCtx, cancel := context.WithTimeout(ctx, 18*time.Second)
 		otp, err := GetLatestOTP(otpCtx)
 		cancel()
 

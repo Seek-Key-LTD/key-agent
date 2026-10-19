@@ -61,9 +61,9 @@ func findLarkCLI() string {
 	return "lark-cli"
 }
 
-// GetLatestOTP reads recent emails via lark-cli and extracts OTP codes with a 5s hard timeout
+// GetLatestOTP reads recent emails via lark-cli and extracts OTP codes with a 15s timeout
 func GetLatestOTP(ctx context.Context) (*OTPResult, error) {
-	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 
 	larkPath := findLarkCLI()
