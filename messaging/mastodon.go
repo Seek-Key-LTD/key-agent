@@ -36,12 +36,13 @@ type MastodonAccount struct {
 
 // MastodonStatus represents a status/toot on Mastodon
 type MastodonStatus struct {
-	ID        string           `json:"id"`
-	CreatedAt string           `json:"created_at"`
-	Content   string           `json:"content"`
-	Account   *MastodonAccount `json:"account"`
-	InReplyTo *string          `json:"in_reply_to_id"`
-	URL       string           `json:"url"`
+	ID         string           `json:"id"`
+	CreatedAt  string           `json:"created_at"`
+	Content    string           `json:"content"`
+	Account    *MastodonAccount `json:"account"`
+	InReplyTo  *string          `json:"in_reply_to_id"`
+	URL        string           `json:"url"`
+	Visibility string           `json:"visibility"`
 }
 
 // MastodonNotification represents an activity notification (e.g. mention, follow)

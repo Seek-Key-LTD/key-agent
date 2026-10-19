@@ -259,22 +259,8 @@ func main() {
 				}
 				log.Printf("[Mastodon Comm] 🔔 Mention from @%s: %s (Notification ID: %s)", sender, content, n.ID)
 
-				// Auto-respond to Mention with host metrics (CPU / Memory)
-				if n.Status != nil && n.Account != nil && !n.Account.Bot {
-					replyTarget := n.Account.Acct
-					metrics := getSystemMetrics()
-					replyContent := fmt.Sprintf("@%s 报告！[%s 席位] 已捕获点名调度。\n📊 主机实时指标：\n• CPU 负载(1/5/15m): %s\n• 内存状态: %s / %s (已用 %s)",
-						replyTarget, agentName, metrics.LoadAvg, metrics.MemUsed, metrics.MemTotal, metrics.MemPercent)
-
-					go func(statusID, replyText string) {
-						time.Sleep(1 * time.Second)
-						if st, err := mastodonClient.PostStatus(context.Background(), replyText, statusID, "public"); err != nil {
-							log.Printf("[Mastodon Comm] ⚠️ Failed to auto-reply to mention %s: %v", statusID, err)
-						} else {
-							log.Printf("[Mastodon Comm] 📤 Auto-replied to @%s (Reply ID: %s, URL: %s)", replyTarget, st.ID, st.URL)
-						}
-					}(n.Status.ID, replyContent)
-				}
+				// Delegate to Intent Router (handles OTP via strict direct DM, wallet balances, Lin Daiyu health check)
+				ProcessMastodonMention(ctx, mastodonClient, n, agentName, vaultAddr)
 			})
 		}
 	} else {
@@ -307,6 +293,41 @@ func main() {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(status)
+	})
+
+	// Local HTTP API: Retrieve latest OTP code
+	mux.HandleFunc("/api/mail/otp", func(w http.ResponseWriter, r *http.Request) {
+		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+		defer cancel()
+		otp, err := GetLatestOTP(ctx)
+		if err != nil {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusNotFound)
+			json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(otp)
+	})
+
+	// Local HTTP API: Query EVM debit card address and Base Sepolia balance
+	mux.HandleFunc("/api/wallet", func(w http.ResponseWriter, r *http.Request) {
+		ctx, cancel := context.WithTimeout(r.Context(), 4*time.Second)
+		defer cancel()
+		addr := GetEVMAddress(agentName, vaultAddr)
+		bal, err := GetBaseSepoliaBalance(ctx, addr)
+		res := map[string]interface{}{
+			"agent":       agentName,
+			"address":     addr,
+			"chain":       "base-sepolia",
+			"chain_id":    84532,
+			"balance_eth": bal,
+		}
+		if err != nil {
+			res["error"] = err.Error()
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(res)
 	})
 
 	atoa.Mount(mux,
