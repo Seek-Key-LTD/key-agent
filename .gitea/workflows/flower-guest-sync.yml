@@ -18,24 +18,26 @@ jobs:
       matrix:
         include:
           - node: "onecloud1"
-            runner_tag: "onecloud1:host"
+            runner_tag: "onecloud1"
             install_path: "/opt/keyagent/releases/production/k-agent"
           - node: "onecloud2"
-            runner_tag: "onecloud2:host"
+            runner_tag: "onecloud2"
             install_path: "/opt/keyagent/releases/production/k-agent"
           - node: "ch1"
-            runner_tag: "ch1:host"
+            runner_tag: "ch1"
             install_path: "/usr/local/bin/k-agent"
           - node: "ch2"
-            runner_tag: "ch2:host"
+            runner_tag: "ch2"
             install_path: "/usr/local/bin/k-agent"
           - node: "ash1"
-            runner_tag: "ash1:host"
+            runner_tag: "ash1"
             install_path: "/usr/local/bin/k-agent"
           - node: "ash2"
-            runner_tag: "ash2:host"
+            runner_tag: "ash2"
             install_path: "/usr/local/bin/k-agent"
 
+    # 2026-10-21（label 白名单化）：原 matrix 写 `onecloud1:host` 这类带执行环境后缀的形式，
+    # Gitea 侧注册标签是裸宿主名（onecloud1 / ch2 …），带后缀永远匹配不到 ⇒ 永久 queued。
     runs-on: ["${{ matrix.runner_tag }}"]
 
     steps:
