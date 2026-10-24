@@ -37,7 +37,7 @@ func stripHTML(input string) string {
 }
 
 // ProcessMastodonMention handles an incoming mention notification
-func ProcessMastodonMention(ctx context.Context, client *messaging.MastodonClient, n *messaging.MastodonNotification, agentName, vaultAddr string) {
+func ProcessMastodonMention(ctx context.Context, client *messaging.MastodonClient, n *messaging.MastodonNotification, agentName string) {
 	if client == nil || n == nil || n.Status == nil || n.Account == nil {
 		return
 	}
@@ -92,7 +92,7 @@ func ProcessMastodonMention(ctx context.Context, client *messaging.MastodonClien
 		strings.Contains(lowerContent, "借记卡") || strings.Contains(lowerContent, "debit") ||
 		strings.Contains(lowerContent, "credit") || strings.Contains(lowerContent, "卡") {
 
-		addr := GetEVMAddress(agentName, vaultAddr)
+		addr := GetEVMAddress(agentName)
 		if addr == "" {
 			replyText = fmt.Sprintf("@%s 💳 [%s 席位] 未检测到绑定的 EVM 借记卡地址或尚未完成链上初始化。", sender, agentName)
 		} else {

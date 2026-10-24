@@ -20,11 +20,23 @@ import (
 	"google.golang.org/adk/v2/feishu"
 	"google.golang.org/adk/v2/integration"
 	"google.golang.org/adk/v2/internal/atoa"
+	"google.golang.org/adk/v2/internal/secrets"
 	"google.golang.org/adk/v2/messaging"
 )
 
 // KeyAgentConfigFile represents local node configuration (e.g. from /etc/keyagent/config.json)
 type KeyAgentConfigFile struct {
+	// Flavor 选择凭据面形态：host|guest；guest 产物恒为 guest，此处仅为 host 产物显式声明。
+	Flavor string `json:"flavor"`
+	// Infisical 凭据面参数，加载后注入 INFISICAL_* 进程环境变量（已显式设置的 env 优先）。
+	Infisical struct {
+		URL            string `json:"url"`
+		ClientID       string `json:"client-id"`
+		ClientSecret   string `json:"client-secret"`
+		ProjectID      string `json:"project-id"`
+		Environment    string `json:"env"`
+		OrganizationID string `json:"organization-id"`
+	} `json:"infisical"`
 	Channels struct {
 		Matrix struct {
 			Enabled     bool     `json:"enabled"`
@@ -78,7 +90,25 @@ func loadKeyAgentConfig(path string) *KeyAgentConfigFile {
 		return nil
 	}
 	log.Printf("[Config] ✅ Loaded configuration from %s", path)
+	applyCredentialEnv(&cfg)
 	return &cfg
+}
+
+// applyCredentialEnv 把 config.json 中的凭据面参数注入进程环境变量；
+// 操作者已显式导出的环境变量优先，config.json 只补空缺。
+func applyCredentialEnv(cfg *KeyAgentConfigFile) {
+	set := func(key, val string) {
+		if val != "" && os.Getenv(key) == "" {
+			os.Setenv(key, val)
+		}
+	}
+	set("KEYAGENT_FLAVOR", cfg.Flavor)
+	set("INFISICAL_URL", cfg.Infisical.URL)
+	set("INFISICAL_CLIENT_ID", cfg.Infisical.ClientID)
+	set("INFISICAL_CLIENT_SECRET", cfg.Infisical.ClientSecret)
+	set("INFISICAL_PROJECT_ID", cfg.Infisical.ProjectID)
+	set("INFISICAL_ENV", cfg.Infisical.Environment)
+	set("INFISICAL_ORGANIZATION_ID", cfg.Infisical.OrganizationID)
 }
 
 func fileExists(p string) bool {
@@ -101,10 +131,10 @@ func main() {
 	for i := 1; i < len(os.Args); i++ {
 		arg := os.Args[i]
 		if arg == "version" || arg == "-v" || arg == "--version" {
-			if strings.Contains(Version, "guest") {
+			if secrets.Flavor() == secrets.FlavorGuest {
 				fmt.Printf("KeyAgent %s (ADK-Go core - Decoupled Guest Edition)\n", Version)
 			} else {
-				fmt.Printf("KeyAgent %s (ADK-Go core - Host Edition with Vault & HAProxy Memory Hub)\n", Version)
+				fmt.Printf("KeyAgent %s (ADK-Go core - Host Edition)\n", Version)
 			}
 			return
 		}
@@ -126,11 +156,6 @@ func main() {
 	authentikURL := os.Getenv("AUTHENTIK_URL")
 	if authentikURL == "" {
 		authentikURL = "https://authentik.capitaltrain.cn"
-	}
-
-	vaultAddr := os.Getenv("VAULT_ADDR")
-	if vaultAddr == "" {
-		vaultAddr = "https://vault.capitaltrain.cn"
 	}
 
 	// Resolve agent identity (stone name from config takes priority over generic hostname/NODE_NAME)
@@ -157,10 +182,10 @@ func main() {
 		}
 	}
 
-	dispatcher := integration.NewDispatcherService(authentikURL, vaultAddr)
+	dispatcher := integration.NewDispatcherService(authentikURL)
 
 	// 读取 ASN 自定义名片字段（soul_name/evm_address/constellation/coherence）
-	soulName, evmAddr, constellation, coherence := atoa.LoadASNCardFields(vaultAddr, agentName)
+	soulName, evmAddr, constellation, coherence := atoa.LoadASNCardFields(agentName)
 
 	// 1. Matrix Channel Initialization
 	matrixServer := os.Getenv("MATRIX_HOMESERVER")
@@ -260,7 +285,7 @@ func main() {
 				log.Printf("[Mastodon Comm] 🔔 Mention from @%s: %s (Notification ID: %s)", sender, content, n.ID)
 
 				// Delegate to Intent Router (handles OTP via strict direct DM, wallet balances, Lin Daiyu health check)
-				ProcessMastodonMention(ctx, mastodonClient, n, agentName, vaultAddr)
+				ProcessMastodonMention(ctx, mastodonClient, n, agentName)
 			})
 		}
 	} else {
@@ -314,7 +339,7 @@ func main() {
 	mux.HandleFunc("/api/wallet", func(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), 4*time.Second)
 		defer cancel()
-		addr := GetEVMAddress(agentName, vaultAddr)
+		addr := GetEVMAddress(agentName)
 		bal, err := GetBaseSepoliaBalance(ctx, addr)
 		res := map[string]interface{}{
 			"agent":       agentName,
@@ -408,7 +433,7 @@ func main() {
 	log.Printf("   - Matrix User:       %s (%s)", matrixUserID, matrixServer)
 	log.Printf("   - Mastodon Server:   %s", mastodonServer)
 	log.Printf("   - Authentik SSO:     %s", authentikURL)
-	log.Printf("   - Vault Secret Path: %s", vaultAddr)
+	log.Printf("   - Secret Flavor:     %s", secrets.Flavor())
 	log.Println("==================================================================")
 
 	if err := http.ListenAndServe(":"+port, mux); err != nil {

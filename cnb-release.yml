@@ -1,9 +1,14 @@
-# key-agent · 5架构交叉编译 → 教育网 OCA S3
+# key-agent · 5架构 × host/guest 双产物交叉编译 → 教育网 OCA S3
 #
-# 状态（2026-10-09）：**未启用**。本文件单独存在，按需 include 引用，避免拖累主配置。
+# 状态（2026-10-11）：**已启用（白嫖制度正式版）**。
+#   - main.push：接管模式需手动把 job2 的 VERIFY_ONLY 默认值改成 false 才写 dev；
+#     默认仍 verify-only，不覆盖 CT131 产物。
+#   - feature/*：由 .cnb.yml 里的 feature build 段引用同款 stages，
+#     纯 verify-only（cnbverify/<commit>），零风险。
 #
 # 目的
 #   解除现有 gitea 流水线（.gitea/workflows/build-k-agent.yml）对 CT131 的单点依赖。
+#   编译算力全部白嫖 CNB 流水线；产物推入 OCA S3，任何有 mc 凭据的主机可自行取回。
 #   现有链路已稳定跑通（含 SHA256 回读校验），故本条**默认不覆盖任何现有产物**。
 #
 # 与现有链路的关系
@@ -62,31 +67,40 @@ main:
             [ "$fail" -eq 0 ] || { echo "凭据未就绪，终止流水线（检查 cnbvault/env.yml 与 allow_slugs）"; exit 1; }
             echo "SECRET_SET=$([ -n "$OCA_SECRET_KEY" ] && echo true || echo false)"
 
-        # ── job 1：5 架构交叉编译 ─────────────────────────────────────
+        # ── job 1：5 架构 × host/guest 双产物交叉编译 ─────────────────
         # 与现有 gitea 流水线保持完全一致的编译参数，确保产物可比对：
         #   CGO_ENABLED=0   静态链接，任意 Linux 直接跑（白嫖主机无 glibc 依赖）
         #   -trimpath        去绝对路径，减小体积
         #   -ldflags '-s -w' 去符号表
         #   ./cmd/agent_dispatcher  注意：与 Makefile 的 oracle-agent 不同，
         #   现有流水线用的是 agent_dispatcher，务必对齐
+        #   -tags guest      guest 变体：平台凭据 Provider（vault）编译期物理剔除
         #
         # ⚠️ 镜像标签必须 ≥ go.mod 的 go 指令（当前 go.mod 要求 **1.26.6**，
         #    用 1.23 会直接报 "go.mod requires go >= 1.26.6" 而失败）。
-        - name: job1 cross-compile 5 arches
+        - name: job1 cross-compile 5 arches × 2 flavors
           image: golang:1.26
           script: |
             set -euo pipefail
             go version
             export GOPROXY="https://goproxy.cn,direct" CGO_ENABLED=0 GOWORK=off
             mkdir -p dist
-            GOOS=linux   GOARCH=amd64          go build -trimpath -ldflags '-s -w' -o dist/k-agent-linux-amd64   ./cmd/agent_dispatcher
-            GOOS=linux   GOARCH=arm64          go build -trimpath -ldflags '-s -w' -o dist/k-agent-linux-arm64   ./cmd/agent_dispatcher
-            GOOS=linux   GOARCH=arm  GOARM=7   go build -trimpath -ldflags '-s -w' -o dist/k-agent-linux-armv7   ./cmd/agent_dispatcher
-            GOOS=darwin  GOARCH=arm64          go build -trimpath -ldflags '-s -w' -o dist/k-agent-darwin-arm64  ./cmd/agent_dispatcher
-            GOOS=darwin  GOARCH=amd64          go build -trimpath -ldflags '-s -w' -o dist/k-agent-darwin-amd64  ./cmd/agent_dispatcher
+            for arch in linux-amd64 linux-arm64 linux-armv7 darwin-arm64 darwin-amd64; do
+              GOOS=${arch%%-*} GOARCH=${arch##*-} \
+                go build -trimpath -ldflags '-s -w' -o dist/k-agent-${arch} ./cmd/agent_dispatcher
+              GOOS=${arch%%-*} GOARCH=${arch##*-} \
+                go build -trimpath -ldflags '-s -w' -tags guest -o dist/k-agent-guest-${arch} ./cmd/agent_dispatcher
+            done
+            # guest 纯度门禁：二进制内不得残留任何 vault 字样（字符串级证明物理分包）
+            for f in dist/k-agent-guest-*; do
+              if strings "$f" | grep -qi vault; then
+                echo "❌ ${f} 含 vault 字符串，guest 纯度失败"; exit 1
+              fi
+              echo "✅ ${f} 无 vault 残留"
+            done
             ls -l dist/
             echo "sha256 清单（用于第3步比对）:"
-            sha256sum dist/* | tee dist/SHA256SUMS
+            sha256sum dist/k-agent-* | tee dist/SHA256SUMS
 
         # ── job 2：上传（默认只写verify 通道）─────────────────────────
         # verify-only: true 时只写 cnbverify/ 前缀，绝不碰现有 dev/prod/versions。

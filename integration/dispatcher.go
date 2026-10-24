@@ -17,10 +17,9 @@ import (
 	"google.golang.org/adk/v2/messaging"
 )
 
-// DispatcherService handles Gitea webhook triggers, Vault/Authentik auth, MySQL/Oracle Memory, Matrix Pager & Calendar locking
+// DispatcherService handles Gitea webhook triggers, Authentik auth, MySQL/Oracle Memory, Matrix Pager & Calendar locking
 type DispatcherService struct {
 	AuthentikURL   string
-	VaultAddr      string
 	MySQLStore     *memory.MySQLMemoryStore
 	OracleStore    *memory.OracleMemoryStore
 	MatrixClient   *messaging.MatrixClient
@@ -33,7 +32,7 @@ func (s *DispatcherService) SetMastodonClient(client *messaging.MastodonClient) 
 }
 
 // NewDispatcherService initializes a new DispatcherService instance
-func NewDispatcherService(authentikURL, vaultAddr string) *DispatcherService {
+func NewDispatcherService(authentikURL string) *DispatcherService {
 	// Initialize Pure Go MySQL Memory Store for Memory Hub (River1 via PVE HAProxy :33061)
 	var mysqlStore *memory.MySQLMemoryStore
 	mysqlHost := os.Getenv("MYSQL_HOST")
@@ -125,7 +124,6 @@ func NewDispatcherService(authentikURL, vaultAddr string) *DispatcherService {
 
 	return &DispatcherService{
 		AuthentikURL: authentikURL,
-		VaultAddr:    vaultAddr,
 		MySQLStore:   mysqlStore,
 		OracleStore:  oracleStore,
 		MatrixClient: matrixClient,

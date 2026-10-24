@@ -25,7 +25,7 @@ var defaultBaseSepoliaRPCs = []string{
 }
 
 // GetEVMAddress resolves the EVM debit card address of the seat
-func GetEVMAddress(agentName, vaultAddr string) string {
+func GetEVMAddress(agentName string) string {
 	if addr := os.Getenv("EVM_ADDRESS"); addr != "" {
 		return strings.TrimSpace(addr)
 	}
@@ -34,8 +34,8 @@ func GetEVMAddress(agentName, vaultAddr string) string {
 			return addr
 		}
 	}
-	if vaultAddr != "" && agentName != "" {
-		_, evmAddr, _, _ := atoa.LoadASNCardFields(vaultAddr, agentName)
+	if agentName != "" {
+		_, evmAddr, _, _ := atoa.LoadASNCardFields(agentName)
 		if evmAddr != "" {
 			return evmAddr
 		}

@@ -56,7 +56,7 @@ Available Commands:
   calendar-add       Create a calendar event
 
 Authentication:
-  Credentials are read from environment variables (e.g. injected by Infisical/Vault):
+  Credentials are read from environment variables (e.g. injected by Secret Provider):
   - FEISHU_APP_ID (or LARK_APP_ID)
   - FEISHU_APP_SECRET (or LARK_APP_SECRET)
 
