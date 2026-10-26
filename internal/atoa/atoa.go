@@ -128,17 +128,16 @@ func NewStaticExtendedAgentCardHandler(card *ExtendedAgentCard) http.Handler {
 	})
 }
 
-// LoadASNCardFields 按生效 flavor 读取 agentcard（soul_name/evm_address/constellation_house）：
-// 凭据面 Provider 由 internal/secrets 按构建产物决定（guest 产物只有 Infisical）。
+// LoadASNCardFields 从 Authentik (主权真相源优先)、凭据面 (secrets Provider) 或环境读取 agentcard 属性（soul_name/evm_address/constellation_house），
 // 并从 Consul KV 读取 coherence（其他 agent 对本 agent 的称呼昵称，仅 host 形态）。
-// 任一来源失败时降级为空值，不阻塞 AgentCard 输出。
+// 任一来源失败时平滑降级，不阻塞 AgentCard 输出。
 func LoadASNCardFields(agentName string) (soulName, evmAddr, constellation string, coherence map[string]string) {
 	coherence = map[string]string{}
 	if agentName == "" {
 		return
 	}
 
-	// 0. Environment variables take highest priority
+	// 0. Environment variables (最高优先级显式覆盖)
 	if v := os.Getenv("SOUL_NAME"); v != "" {
 		soulName = v
 	}
@@ -149,7 +148,56 @@ func LoadASNCardFields(agentName string) (soulName, evmAddr, constellation strin
 		constellation = v
 	}
 
-	// 1. 凭据面读取: <mount>/dev/agentcard/<agentName>（Host=Vault / Guest=Infisical）
+	// 1. Authentik Identity Connector (SSOT): 连接 Authentik 纯管道自省器
+	if soulName == "" || evmAddr == "" || constellation == "" {
+		authentikURL := os.Getenv("AUTHENTIK_URL")
+		if authentikURL == "" {
+			authentikURL = "https://sso.capitaltrain.cn"
+		}
+		authentikToken := readAuthentikToken()
+		if authentikToken != "" {
+			client := &http.Client{Timeout: 5 * time.Second}
+			searchURL := fmt.Sprintf("%s/api/v3/core/users/?search=%s", authentikURL, agentName)
+			req, err := http.NewRequest("GET", searchURL, nil)
+			if err == nil {
+				req.Header.Set("Authorization", "Bearer "+authentikToken)
+				if resp, err := client.Do(req); err == nil {
+					defer resp.Body.Close()
+					var ur struct {
+						Results []struct {
+							Username   string `json:"username"`
+							Attributes struct {
+								SoulName      string `json:"soul_name"`
+								EVMAddress    string `json:"evm_address"`
+								Constellation string `json:"constellation_house"`
+								Seat          string `json:"seat"`
+							} `json:"attributes"`
+						} `json:"results"`
+					}
+					if err := json.NewDecoder(resp.Body).Decode(&ur); err == nil {
+						for _, r := range ur.Results {
+							if r.Username == "agent-sa-"+agentName || r.Attributes.Seat == agentName {
+								if soulName == "" && r.Attributes.SoulName != "" {
+									soulName = r.Attributes.SoulName
+								}
+								if evmAddr == "" && r.Attributes.EVMAddress != "" {
+									evmAddr = r.Attributes.EVMAddress
+								}
+								if constellation == "" && r.Attributes.Constellation != "" {
+									constellation = r.Attributes.Constellation
+								}
+								log.Printf("[WhoAmI] Identified as %s via Authentik Connector (Soul: %s, House: %s, EVM: %s)",
+									agentName, soulName, constellation, evmAddr)
+								break
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// 2. 凭据面降级读取: <mount>/dev/agentcard/<agentName> (Host=Vault / Guest=Infisical)
 	if soulName == "" || evmAddr == "" || constellation == "" {
 		if p, err := secrets.ForFlavor(); err == nil {
 			if m, err := p.Get(context.Background(), "dev/agentcard/"+agentName); err == nil {
@@ -168,7 +216,7 @@ func LoadASNCardFields(agentName string) (soulName, evmAddr, constellation strin
 		}
 	}
 
-	// 2. Consul KV: coherence/<from>/<agentName> — 收集所有 agent 对本 agent 的昵称（host-only）
+	// 3. Consul KV: coherence/<from>/<agentName> — 收集所有 agent 对本 agent 的昵称（host-only）
 	if secrets.Flavor() == secrets.FlavorGuest {
 		return
 	}
@@ -203,6 +251,29 @@ func LoadASNCardFields(agentName string) (soulName, evmAddr, constellation strin
 	return
 }
 
+// readAuthentikToken 获取叩门 Authentik 的凭据 (环境变量、本地文件、或从 secrets Provider 读取)。
+func readAuthentikToken() string {
+	if t := os.Getenv("AUTHENTIK_TOKEN"); t != "" {
+		return strings.TrimSpace(t)
+	}
+	paths := []string{"/etc/keyagent/authentik_token", "/etc/keyagent/token", "/root/.authentik-token"}
+	for _, p := range paths {
+		if b, err := os.ReadFile(p); err == nil {
+			if s := strings.TrimSpace(string(b)); s != "" {
+				return s
+			}
+		}
+	}
+	// 尝试通过 secrets.ForFlavor() 从凭据面读取 dev/authentik/ci
+	if p, err := secrets.ForFlavor(); err == nil {
+		if m, err := p.Get(context.Background(), "dev/authentik/ci"); err == nil {
+			if t := m["AUTHENTIK_TOKEN"]; t != "" {
+				return strings.TrimSpace(t)
+			}
+		}
+	}
+	return ""
+}
 // agentName/description 为名片字段；userInfoURL 为 authentik userinfo 端点。
 // soulName/evmAddress/constellation/coherence 为 ASN 自定义字段（花神/钱包/星宫/关系昵称）。
 func Mount(mux *http.ServeMux, agentName, agentDesc, agentAddr, userInfoURL string, llm LLMConfig,
