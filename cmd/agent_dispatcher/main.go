@@ -116,7 +116,7 @@ func fileExists(p string) bool {
 	return err == nil
 }
 
-var Version = "v2.5.2"
+var Version = "v2.5.3"
 
 func main() {
 	// 0. Handle native Feishu subcommands (e.g. k-agent feishu im-send ...)
