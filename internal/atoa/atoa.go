@@ -152,7 +152,7 @@ func LoadASNCardFields(agentName string) (soulName, evmAddr, constellation strin
 	if soulName == "" || evmAddr == "" || constellation == "" {
 		authentikURL := os.Getenv("AUTHENTIK_URL")
 		if authentikURL == "" {
-			authentikURL = "https://sso.capitaltrain.cn"
+			authentikURL = "https://authentik.capitaltrain.cn"
 		}
 		authentikToken := readAuthentikToken()
 		if authentikToken != "" {
@@ -176,7 +176,7 @@ func LoadASNCardFields(agentName string) (soulName, evmAddr, constellation strin
 					}
 					if err := json.NewDecoder(resp.Body).Decode(&ur); err == nil {
 						for _, r := range ur.Results {
-							if r.Username == "agent-sa-"+agentName || r.Attributes.Seat == agentName {
+							if r.Username == "agent-sa-"+agentName || r.Attributes.Seat == agentName || r.Username == agentName {
 								if soulName == "" && r.Attributes.SoulName != "" {
 									soulName = r.Attributes.SoulName
 								}
